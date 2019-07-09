@@ -1,0 +1,11 @@
+module XFRPGPU
+in  input1 : Int,
+    input2 : Float,
+    input3 : Char
+out output1 : Int,
+    output2 : Float,
+    output3 : Char
+use dep1,dep2
+
+
+node node1 = 10
