@@ -60,7 +60,7 @@ definition :
       AT n = INT
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
       it = id_and_type EQUAL ge = gexpr
-      { GNODE(it,n,init,ge) }
+      { GNode(it,n,init,ge) }
 
 (* ---------- Node or Function Expression ---------- *)
 expr :

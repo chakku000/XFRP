@@ -23,12 +23,13 @@ let compile in_c : string =
   let lexbuf = from_channel in_c in
   try
     let ast : Syntax.ast = Parser.top Lexer.read lexbuf in
-    (* "Module_ID = " ^ ast.module_id ^ "\n" ^ "Input Node = [" *)
+    (* let p = "Module_ID = " ^ ast.module_id ^ "\n" ^ "Input Node = [" *)
     (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.in_nodes) *)
     (* ^ "]\n" ^ "Output Node = [" *)
     (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.out_nodes) *)
     (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
-    (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) *)
+    (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
+    (* print_endline p; *)
     let code : string = Codegen.code_of_ast ast in
     let program = Module.ast_to_program ast in
     Module.print_program program;

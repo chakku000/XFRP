@@ -8,4 +8,4 @@ out output1 : Int,
 use dep1,dep2
 
 
-node node1 = 10
+gnode@1024 gpu : Int = input1 + input2 + input3

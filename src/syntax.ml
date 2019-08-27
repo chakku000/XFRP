@@ -90,15 +90,15 @@ let rec string_of_gexpr = function
 
 type definition = 
   | Node of id_and_type * expr option (* init *) * expr
-  | GNODE of id_and_type * int * expr option (* init *) * gexpr
+  | GNode of id_and_type * int * expr option (* init *) * gexpr
   (* | Fun  of (id * Type.t * id list * Type.t list) * expr *)
   (* | Const of id_and_type * expr *)
 
 let string_of_definition = function
   | Node (it, Some ie , e) -> "Node {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ (string_of_expr ie) ^ "\n\texpr = " ^ (string_of_expr e) ^ "\n}"
   | Node (it, None, e) -> "Node {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ "NONE" ^ "\n\texpr = " ^ (string_of_expr e) ^ "\n}"
-  | GNODE (it, n, Some ie , e) -> "GNode {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ (string_of_expr ie) ^ "\n\texpr = " ^ (string_of_gexpr e) ^ "\n}"
-  | GNODE (it, n, None, e) -> "GNode {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ "NONE" ^ "\n\texpr = " ^ (string_of_gexpr e) ^ "\n}"
+  | GNode (it, n, Some ie , e) -> "GNode {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ (string_of_expr ie) ^ "\n\texpr = " ^ (string_of_gexpr e) ^ "\n}"
+  | GNode (it, n, None, e) -> "GNode {\n\t" ^ (string_of_id_and_type it) ^ " ,\n\tinit = " ^ "NONE" ^ "\n\texpr = " ^ (string_of_gexpr e) ^ "\n}"
 
 
 type ast = {
