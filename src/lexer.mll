@@ -27,24 +27,31 @@ rule read = parse
   | ']'               { RBRACKET }
   | '('               { LPAREN }
   | ')'               { RPAREN }
+  | '='               { EQUAL }
+  | '+'               { PLUS }
+  | '-'               { MINUS }
+  | '%'               { PERCENT }
+  | '*'               { ASTERISK }
+  | '/'               { SLASH }
+  | '@'               { AT }
   | "module"          { MODULE }
   | "in"              { IN }
   | "out"             { OUT }
   | "use"             { USE }
   | "node"            { NODE }
-  (* | "gpu_node"        { GNODE} *)
+  | "gnode"           { GNODE}
   | "init"            { INIT }
   | "true"            { TRUE }
   | "false"           { FALSE }
-  (* | "if"              { IF } *)
-  (* | "then"            { THEN } *)
-  (* | "else"            { ELSE } *)
-  (* | "last"            { LAST } *)
+  | "if"              { IF }
+  | "then"            { THEN }
+  | "else"            { ELSE }
+  | "last"            { LAST }
+  | "self"            { SELF }
   (* | "fun"             { FUNCTION } *)
-  | '='              { EQUAL }
   | id                { ID (Lexing.lexeme lexbuf) }
-  | fdigits          { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
-  | digits           { INT (int_of_string (Lexing.lexeme lexbuf)) }
+  | fdigits           { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
+  | digits            { INT (int_of_string (Lexing.lexeme lexbuf)) }
   | eof               { EOF }
   | _                 { raise (Error ("Unexpected Char: " ^ Lexing.lexeme lexbuf ^ " line: " ^ (string_of_int lexbuf.lex_curr_p.pos_lnum) ^ " column: " ^ (string_of_int (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol)))) }
 and read_comment = parse

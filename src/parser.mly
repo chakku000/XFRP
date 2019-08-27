@@ -5,14 +5,13 @@
 %}
 
 (* 予約後 *)
-%token MODULE IN OUT USE INIT NODE TRUE FALSE
-(* IN OUT USE NODE INIT TRUE FALSE IF THEN ELSE LAST FUNCTION *)
+%token MODULE IN OUT USE INIT NODE GNODE TRUE FALSE IF THEN ELSE AT LAST SELF
 (* 括弧 *)
 %token LBRACKET RBRACKET LPAREN RPAREN
 (* 記号 *)
 %token COMMA COLON (* AT SEMICOLON *)
 (* 演算 *)
-%token EQUAL (* )PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
+%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK (* EQUAL2 OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
 (* 識別子 *)
 %token <string> ID
 (* 数値 *)
@@ -25,12 +24,12 @@
  %start <Syntax.ast> top
 
 (* 下のほうが優先順位が高い *)
-(* %right prec_if *)
+%right prec_if
 (* %left  OR *)
 (* %left  EQUAL2 *)
 (* %left  LTE LT RTE RT *)
-(* %left  PLUS MINUS *)
-(* %left  ASTERISK SLASH PERCENT *)
+%left  PLUS MINUS
+%left  ASTERISK SLASH PERCENT
 
 %%
 
@@ -54,12 +53,32 @@ top :
 definition :
   | NODE 
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      ito = id_and_type_opt EQUAL e = expr
-      { Node(ito,init,e) }
+      (* ito = id_and_type_opt EQUAL e = expr *)
+      it = id_and_type EQUAL e = expr
+      { Node(it,init,e) }
+  | GNODE (* gnode@1024 init[0] x: Int = ... *)
+      AT n = INT
+      init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
+      it = id_and_type EQUAL ge = gexpr
+      { GNODE(it,n,init,ge) }
 
 (* ---------- Node or Function Expression ---------- *)
 expr :
-  | constant { EConst($1) }
+  | constant        { EConst($1) }
+  | id = ID         { Eid(id) }
+  | id = ID AT a = annotation { EAnnot(id,a) }
+  | expr binop expr { Ebin($2,$1,$3) }
+  | LPAREN expr RPAREN { $2 }
+  | IF cond = expr THEN e1 = expr ELSE e2 = expr %prec prec_if { Eif(cond,e1,e2) } (* %prec prec_if down the priority of if statement *)
+
+gexpr : 
+  | SELF            { GSelf }
+  | constant        { GConst($1) }
+  | id = ID         { Gid(id) }
+  | id = ID AT a = annotation { GAnnot(id,a) }
+  | gexpr binop gexpr   { Gbin($2,$1,$3) }
+  | LPAREN gexpr RPAREN  { $2 }
+  | IF cond = gexpr THEN e1 = gexpr ELSE e2 = gexpr %prec prec_if { Gif(cond,e1,e2) }
 
 (* ---------- Initialize Node value -------------------- *)
 (* restricted expression for initialize the node value *)
@@ -74,11 +93,9 @@ init_args :
 id_and_type : 
   | id = ID COLON t = type_specific { (id,t) }
 
-id_and_type_opt:
-  | id = ID COLON t = type_specific
-    { (id,Some t) }
-  | id = ID
-    { (id,None) }
+(* id_and_type_opt: *)
+(*   | id = ID COLON t = type_specific { (id,Some t) } *)
+(*   | id = ID { (id,None) } *)
 
 type_specific :
   | t = prime_type_specific { t }
@@ -94,6 +111,19 @@ prime_type_specific :
       | _ -> raise (UnknownTypeDeclaration t)
     }
 
+
+(* -------------- Operator ---------------- *)
+%inline
+binop:
+  | PLUS    { BAdd }
+  | MINUS   { BMinus }
+  | ASTERISK{ BMul }
+  | SLASH   { BDiv }
+  | PERCENT { BMod }
+
+
+annotation:
+      | LAST { ALast }
 
 (* -------------- Constant ---------------- *)
 constant:
