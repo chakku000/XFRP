@@ -12,23 +12,25 @@ type program = {
   input : Syntax.id list; (* list of identifier of input node *)
   output : Syntax.id list;(* list of identifier of output node *)
   node : Syntax.id list; (* list of identifier of nodes. It includes input, output, and othre nodes. *)
-  gnode : Syntax.id list;
+  gnode : Syntax.id list; (* list of gpu node *)
 }
 
 
 let ast_to_program : Syntax.ast -> program =  fun ast ->
   let input = List.map (fun (i,t) -> i) ast.in_nodes in
   let output = List.map (fun (i,t) -> i) ast.out_nodes in
+  (* nodeの構築 *)
   let node = 
-    let filter_function = function
-      | Syntax.Node (_,_,_) -> true
+    let filter_function = function (* Nodeだけ取得する関数 *)
+      | Syntax.Node (_,_,_)  -> true
       | _ -> false in
+    let node_list = List.filter filter_function ast.definitions in
     let map_function = function
       | Syntax.Node ((i,t),_,_) -> i
       | _ -> raise(Unreachable("unreachable code")) in
-    let filtered = List.filter filter_function ast.definitions in
-    List.map map_function filtered
+    input @ List.map map_function node_list  (* definitionsのNodeにinputノードを追加したもの*)
   in
+  (* gpu nodeの構築 *)
   let gnode = 
     let filter_function = function
       | Syntax.GNode (_,_,_,_) -> true
