@@ -1,11 +1,16 @@
 module XFRPGPU
 in  input1 : Int,
     input2 : Float,
-    input3 : Char
+    input3 : Int
 out output1 : Int,
     output2 : Float,
-    output3 : Char
+    output3 : Int
 use dep1,dep2
 
 
-gnode@1024 gpu : Int = input1 + input2 + input3
+gnode@1024 pixel : Int = input1 + input2 + input3
+gnode@2048 init[0] pix_init : Int = input1 * input2 * input2
+
+node output1 : Int = 114514
+node output2 : Float = 3.14
+node output3 : Int = 810
