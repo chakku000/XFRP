@@ -30,9 +30,9 @@ let compile in_c : string =
     (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
     (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
     (* print_endline p; *)
-    let code : string = Codegen.code_of_ast ast in
-    let program = Module.ast_to_program ast in
-    Module.print_program program;
+    let code : string = Codegen.code_of_ast ast in (* C/C++のソースコード *)
+    let program = Module.ast_to_program ast in     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
+    Module.print_program program; (* astから取り出したデータを出力 *)
     code
   with
   | Lexer.Error msg -> raise (CompileError ("Lexing error: " ^ msg))
