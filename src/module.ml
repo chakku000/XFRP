@@ -135,4 +135,4 @@ let print_program prog : unit =
 
 (* プログラム中のノードの数. Gnodeは展開前の1つで計算する *)
 let node_num prog : int = 
-  Hashtbl.length idtable
+  Hashtbl.length prog.id_table

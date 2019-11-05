@@ -30,8 +30,8 @@ let compile in_c : string =
     (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
     (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
     (* print_endline p; *)
-    let code : string = Codegen.code_of_ast ast in (* C/C++のソースコード *)
     let program = Module.ast_to_program ast in     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
+    let code : string = Codegen.code_of_ast ast program in (* C/C++のソースコード *)
     (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
     let graph = program.graph in
     Hashtbl.iter (fun k v -> print_int k; print_string "->";
