@@ -32,7 +32,10 @@ let compile in_c : string =
     (* print_endline p; *)
     let code : string = Codegen.code_of_ast ast in (* C/C++のソースコード *)
     let program = Module.ast_to_program ast in     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
-    Module.print_program program; (* astから取り出したデータを出力 *)
+    (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
+    let graph = program.graph in
+    Hashtbl.iter (fun k v -> print_int k; print_string "->";
+                             Module.print_intset v; print_newline ()) graph;
     code
   with
   | Lexer.Error msg -> raise (CompileError ("Lexing error: " ^ msg))
