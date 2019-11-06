@@ -1,4 +1,5 @@
 open Syntax
+
 let header_list = ["stdio.h"; "stdlib.h"]
 
 let header_code () =
@@ -33,11 +34,26 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   in
   input ^ "\n" ^ node ^ "\n" ^ gnode
 
-let setup_code (ast: Syntax.ast) (prg : Module.program) : string =
-  let init_gnode = List.filter_map
-  (function | GNode ((i,t),n,init,_) ->  Some( Printf.sprintf "\tfor(int i=0;i<2;i++) cudaMalloc((void**)&g_%s[i],%d*sizeof(%s));" i n (Type.of_string t) );
-            | _ -> None)
-  ast.definitions |> String.concat "\n"
+let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
+  let init_gnode =
+    List.filter_map
+      (function
+        | GNode ((i, t), n, init, _) ->
+            let malloc =
+              Printf.sprintf
+                "\tfor(int i=0;i<2;i++) \
+                 cudaMalloc((void**)&g_%s[i],%d*sizeof(%s));"
+                i n (Type.of_string t)
+            in
+            if Option.is_none init then Some malloc
+            else begin
+              let ini_code = Printf.sprintf "\tcudaMemSet(%s,%s,sizeof(%s)*%d)" i "12345" (Type.of_string t) n in (* TODO init->stringが必要.暫定的に定数12345を入れてる *)
+              Some(malloc^"\n"^ini_code)
+            end
+        | _ ->
+            None)
+      ast.definitions
+    |> String.concat "\n"
   in
   "void setup(){\n" ^ "\tturn=0;\n" ^ init_gnode ^ "\n" ^ "}"
 
