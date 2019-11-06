@@ -56,6 +56,7 @@ let main () =
         | None -> raise (CommandError "Input file is not specified.") )
     in
     let c_code = compile input in
+    print_endline "======================================";
     print_endline c_code
   with CommandError msg -> Printf.eprintf "Command Error: %s" msg
 

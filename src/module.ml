@@ -1,9 +1,10 @@
 exception Unreachable of string
 
 module IntSet = Set.Make (Int)
-let print_intset st = 
-  print_char '{';
-  IntSet.iter (fun i -> print_int i; print_char ',') st;
+
+let print_intset st =
+  print_char '{' ;
+  IntSet.iter (fun i -> print_int i ; print_char ',') st ;
   print_char '}'
 
 type node_t =
@@ -19,7 +20,7 @@ type program =
     output: Syntax.id list
   ; (* list of identifier of output node *)
     node: Syntax.id list
-  ; (* list of identifier of nodes. It includes input, output, and othre nodes. *)
+  ; (* list of identifier of nodes. It includes input, output, and othre nodes. Not that gnode is not contained *)
     gnode: Syntax.id list
   ; (* list of gpu node *)
     id_table: (string, int) Hashtbl.t
@@ -27,14 +28,12 @@ type program =
     graph: (int, IntSet.t) Hashtbl.t (* graph[i] is the set of parent nodes *)
   }
 
-
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
 let construct_id_table (nodes : Syntax.id list) (gnodes : Syntax.id list) :
     (string, int) Hashtbl.t =
   let table = Hashtbl.create (List.length nodes + List.length gnodes) in
   List.iteri (fun i n -> Hashtbl.add table n i) (nodes @ gnodes) ;
   table
-
 
 (* 依存関係を表すグラフ(隣接リスト)を構築 *)
 (* 依存関係は親ノードの集合を持つ *)
@@ -134,5 +133,4 @@ let print_program prog : unit =
   Printf.printf "GNode : %s\n" (String.concat ", " prog.gnode)
 
 (* プログラム中のノードの数. Gnodeは展開前の1つで計算する *)
-let node_num prog : int = 
-  Hashtbl.length prog.id_table
+let node_num prog : int = Hashtbl.length prog.id_table
