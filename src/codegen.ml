@@ -34,6 +34,13 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   in
   input ^ "\n" ^ node ^ "\n" ^ gnode
 
+(* 変数variableにexprの結果を代入する *)
+(* C言語ではifは文なので, assign_statement ("x",int) "if y then 10 else 20" は次のように変換する
+ * int x;
+   { if(y){ x = 10; }else{ y = 20; } } *)
+let assign_statement (variable : (string,Type.t)) (expr : Syntax.expr) : string = 
+
+
 let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
   let init_gnode =
     List.filter_map
