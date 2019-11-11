@@ -58,7 +58,6 @@ type expr =
   | Eid of id
   | EAnnot of id * annot
   | Ebin of binop * expr * expr 
-  (* | Eif of expr * expr * expr *)
   | EApp of id * expr list
   | Eif of expr * expr * expr
 
