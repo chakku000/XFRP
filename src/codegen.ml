@@ -35,7 +35,8 @@ let rec string_of_c_ast (ast : c_ast) : string =
   | Call (f, args) ->
       Printf.sprintf "Call[ %s ][ %s ]" f
         (List.map string_of_c_ast args |> String.concat " , ")
-  | If(_,_,_,_) -> "If [] []"
+  | If(_, (cond_pre,cond_post),_,_) ->
+      Printf.sprintf "If [cond_pre: [%s], cond_post:[%s]] [] []" (string_of_c_ast cond_pre) (string_of_c_ast cond_post)
   | CodeList codes ->
       List.map string_of_c_ast codes |> String.concat " :: "
 
@@ -92,15 +93,21 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
       let op_symbol = string_of_binop op in
       let pre1, cur1 = expr_to_clang e1 in
       let pre2, cur2 = expr_to_clang e2 in
-      (CodeList [pre1; pre2], Binop (op_symbol, cur1, cur2))
+      let pre = match pre1, pre2 with
+                | (Empty,Empty) -> Empty
+                | (pre1, Empty) -> pre1
+                | (Empty, pre2) -> pre2
+                | (pre1, pre2)  -> CodeList([pre1;pre2]) 
+      in
+      (pre, Binop (op_symbol, cur1, cur2))
   | EApp (f, args) ->
       let maped = List.map expr_to_clang args in
       let pre : c_ast list = List.map (fun (p, _) -> p) maped in
       let a : c_ast list = List.map (fun (_, a) -> a) maped in
       (CodeList pre, Call (f, a))
-  | Eif(cond_expr, then_expr, else_expr) ->  (* TODO 実装 *)
-      let res_var = get_unique_name () in (* 型は? *)
-      (If((Type.TInt,res_var), expr_to_clang cond_expr, expr_to_clang then_expr, expr_to_clang else_expr), Variable(res_var))
+  | Eif(cond_expr, then_expr, else_expr) ->
+      let res_var = get_unique_name () in
+      (If((Type.TInt (* TODO この変数の型を確認. 今は暫定的にType.TIntにしている. *), res_var), expr_to_clang cond_expr, expr_to_clang then_expr, expr_to_clang else_expr), Variable(res_var))
 
 
 let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
@@ -119,7 +126,7 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
       let right = code_of_c_ast ca tabs in
       tab ^ var ^ "=" ^ right ^ ";"
   | Binop (op, ast1, ast2) ->
-      Printf.sprintf "%s %s %s" (code_of_c_ast ast1 0) op
+      Printf.sprintf "(%s %s %s)" (code_of_c_ast ast1 0) op
         (code_of_c_ast ast2 0)
   | Call(f,args) -> 
       Printf.sprintf "%s(%s)" f (List.map (fun ast -> code_of_c_ast ast 0) args |> String.concat ", ")
@@ -127,15 +134,34 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
         (cond_pre,cond_post),
         (then_pre,then_post),
         (else_pre,else_post) ) ->
-          let cond_post_code = code_of_c_ast cond_pre tabs in
+          let cond_pre_code = code_of_c_ast cond_pre tabs in
+          Printf.printf "check : %s\n" (string_of_c_ast cond_pre);
+          Printf.printf "check2 : [%s]\n" cond_pre_code;
           let if_var_dec = tab ^ (Printf.sprintf "%s %s;\n" (Type.of_string t) res) in (* Ifの結果の宣言 *)
           let cond_var = get_unique_name () in
           let cond_var_dec = tab ^ (Printf.sprintf "%s %s = %s;\n" (Type.of_string Type.TBool) cond_var (code_of_c_ast cond_post 0) )in (* 条件の結果をcond_varに保存 *)
-          cond_post_code ^ if_var_dec ^ cond_var_dec (* TODO 実装未完了 *)
+          let if_st = tab ^ (Printf.sprintf "if(!!%s){\n" cond_var) in
+          let then_st1 = code_of_c_ast then_pre (tabs+1) in
+          let then_st2 = tab ^ (Printf.sprintf "\t%s = %s;\n" res (code_of_c_ast then_post 0)) in
+          let else_st = tab ^ "else{\n" in
+          let else_st1 = code_of_c_ast else_pre (tabs+1) in
+          let else_st2 = tab ^ (Printf.sprintf "\t%s = %s;\n" res (code_of_c_ast else_post 0)) in
+          let else_st3 = tab ^ "}" in
+          (* 
+           * cond_pre_code...
+           * `t` `res`; // if_var_dec
+           * bool `cond_var` = `cond_post` // cond_var_dec
+           * if(!!`cond_var`){ // if_1
+           *    then_pre...
+           *    res = then_post;
+           * }else{
+           * }
+           * *)
+          cond_pre_code ^ if_var_dec ^ cond_var_dec ^ if_st ^ then_st1 ^ then_st2 ^ else_st ^ else_st1 ^ else_st2 ^ else_st3
   | CodeList(lst) -> 
       List.iter (fun ast -> Printf.printf "--> %s\n" (string_of_c_ast ast) ) lst;
       List.filter_map (function | Empty -> None
-                                | ast -> Some( code_of_c_ast ast tabs )) lst |> String.concat "\n"
+                                | ast -> Some( code_of_c_ast ast tabs )) lst |> String.concat "\n<>"
 
 (* ノード更新関数を生やす関数 *)
 let generate_node_update_function (name : string) (expr : Syntax.expr) =

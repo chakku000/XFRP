@@ -11,7 +11,7 @@
 (* 記号 *)
 %token COMMA COLON (* AT SEMICOLON *)
 (* 演算 *)
-%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK (* EQUAL2 OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
+%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 (* OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
 (* 識別子 *)
 %token <string> ID
 (* 数値 *)
@@ -26,7 +26,7 @@
 (* 下のほうが優先順位が高い *)
 %right prec_if
 (* %left  OR *)
-(* %left  EQUAL2 *)
+%left  EQUAL2
 (* %left  LTE LT RTE RT *)
 %left  PLUS MINUS
 %left  ASTERISK SLASH PERCENT
@@ -120,6 +120,7 @@ binop:
   | ASTERISK{ BMul }
   | SLASH   { BDiv }
   | PERCENT { BMod }
+  | EQUAL2  { BEq }
 
 
 annotation:
