@@ -155,6 +155,8 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
            *    then_pre...
            *    res = then_post;
            * }else{
+           *    else_pre...
+           *    res = else_post;
            * }
            * *)
           cond_pre_code ^ if_var_dec ^ cond_var_dec ^ if_st ^ then_st1 ^ then_st2 ^ else_st ^ else_st1 ^ else_st2 ^ else_st3
