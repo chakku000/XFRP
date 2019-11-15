@@ -1,5 +1,6 @@
 open Syntax
 
+(* memo: 現在の実装ではNodeはc_astに変換される. 時間があればtarget.astに変換するようにしたほうが良いかもしれない *)
 type c_ast =
   | Empty
   | Const of string
