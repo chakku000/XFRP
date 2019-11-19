@@ -63,7 +63,7 @@ type expr =
 
 type gexpr = 
   | GSelf
-  | GConst of const
+  | GConst of const (* 定数1,2,3とか *)
   | Gid of id
   | GAnnot of id * annot
   | Gbin of binop * gexpr * gexpr

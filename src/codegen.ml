@@ -253,6 +253,15 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
       ast.definitions
     |> String.concat "\n\n"
   in
+  let gnode_update_kernel = 
+    List.filter_map
+      (function
+        | GNode ((i,t),_,_,e) -> 
+            Some (Gpu.generate_gnode_update_kernel i e prg)
+        | _ -> None)
+      ast.definitions
+        |> String.concat "\n\n"
+  in
   let main = main_code in
   let setup = setup_code ast prg in
-  String.concat "\n\n" [header; variables; node_update; setup; main]
+  String.concat "\n\n" [header; variables; node_update; gnode_update_kernel; setup; main]
