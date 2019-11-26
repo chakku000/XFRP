@@ -257,7 +257,7 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
     List.filter_map
       (function
         | GNode ((i,t),_,_,e) -> 
-            Some (Gpu.generate_gnode_update_kernel i e prg)
+            Some (Gpu.generate_gnode_update_kernel i e ast prg)
         | _ -> None)
       ast.definitions
         |> String.concat "\n\n"

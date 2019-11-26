@@ -8,7 +8,7 @@ out output1 : Int,
 use dep1,dep2
 
 
-gnode@1024 pixel : Int = input1 + input2 + input3
+gnode@1024 pixel : Int = input1 + input2 + input3 * output1@last
 gnode@2048 init[0] pix_init : Int = input1 * input2 * input2
 
 node output1 : Int = 1 + 2 + 3 + if output1@last then 10 else 20
