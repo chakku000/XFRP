@@ -80,8 +80,10 @@ type expr =
 type gexpr =
   | GSelf
   | GConst of const (* 定数1,2,3とか *)
-  | Gid of id
+  | Gid of id (* CPUノードに対する参照 *)
   | GAnnot of id * annot
+  | GIdAt of id * gexpr (* GPUノードに対する参照. gnodeの右辺に出現するid[self+1]みたいなの *)
+  | GIdAtAnnot of id * gexpr * annot
   | Gbin of binop * gexpr * gexpr
   | GApp of id * gexpr list
   | Gif of gexpr * gexpr * gexpr
@@ -111,8 +113,11 @@ let rec string_of_gexpr = function
   | GConst c ->
       "EConst( " ^ string_of_const c ^ " )"
   | Gid i ->
-      Printf.printf "poi %s\n" i ;
       "Eid( " ^ i ^ ")"
+  | GIdAt (i, idx) ->
+      Printf.sprintf "GIdAt(%s , %s)" i (string_of_gexpr idx)
+  | GIdAtAnnot (i, idx, _) ->
+      Printf.sprintf "GIdAtAnnot(%s , %s)" i (string_of_gexpr idx)
   | Gbin (op, e1, e2) ->
       "Ebin (" ^ string_of_binop op ^ "){ " ^ string_of_gexpr e1 ^ " op "
       ^ string_of_gexpr e2 ^ " }"

@@ -74,8 +74,11 @@ expr :
 gexpr : 
   | SELF            { GSelf }
   | constant        { GConst($1) }
+  (* ここらへんのパースはもう少し上手くやれそうな気がする *)
   | id = ID         { Gid(id) }
   | id = ID AT a = annotation { GAnnot(id,a) }
+  | id = ID LBRACKET index = gexpr RBRACKET { GIdAt(id,index) }
+  | id = ID LBRACKET index = gexpr RBRACKET AT a = annotation { GIdAtAnnot(id,index,a) }
   | gexpr binop gexpr   { Gbin($2,$1,$3) }
   | LPAREN gexpr RPAREN  { $2 }
   | IF cond = gexpr THEN e1 = gexpr ELSE e2 = gexpr %prec prec_if { Gif(cond,e1,e2) }

@@ -42,6 +42,10 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
         else StringSet.empty
     | GAnnot (_, _) ->
         StringSet.empty
+    | GIdAt (i, idx) ->
+        StringSet.empty
+    | GIdAtAnnot (i, idx, _) ->
+        StringSet.empty
     | Gbin (_, e1, e2) ->
         StringSet.union (collect_node_deps e1) (collect_node_deps e2)
     | GApp (_, el) ->
@@ -54,16 +58,14 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
   in
   let rec collect_node_atlast_deps e =
     match e with
-    | GSelf ->
-        StringSet.empty
-    | GConst _ ->
-        StringSet.empty
-    | Gid _ ->
+    | GSelf | GConst _ | Gid _ ->
         StringSet.empty
     | GAnnot (id, _) ->
         if List.exists (String.equal id) program.node then
           StringSet.singleton id
         else StringSet.empty
+    | GIdAt _ | GIdAtAnnot _ ->
+        StringSet.empty
     | Gbin (_, e1, e2) ->
         StringSet.union
           (collect_node_atlast_deps e1)
@@ -81,13 +83,11 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
   in
   let rec collect_gnode_deps e =
     match e with
-    | GSelf ->
+    | GSelf | GConst _ | Gid _ | GAnnot _ ->
         StringSet.empty
-    | GConst _ ->
-        StringSet.empty
-    | Gid _ ->
-        StringSet.empty
-    | GAnnot _ ->
+    | GIdAt (i, _) ->
+        StringSet.singleton i
+    | GIdAtAnnot _ ->
         StringSet.empty
     | Gbin (_, e1, e2) ->
         StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2)
@@ -121,19 +121,21 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
              nd)
     |> String.concat ","
   in
-  let gpu_args = 
+  let gpu_args =
     StringSet.elements gnode_set
-    |> List.map (fun nd -> 
-        Printf.sprintf "%s* %s"
-        (Hashtbl.find id_to_type_table nd |> Type.of_string)
-        nd)
+    |> List.map (fun nd ->
+           Printf.sprintf "%s* %s"
+             (Hashtbl.find id_to_type_table nd |> Type.of_string)
+             nd)
     |> String.concat "n"
   in
   let args =
     (* 順序は @lastがついてないノード -> @lastがついているノード -> gnodeの引数 となる. それぞれの中では辞書順で並んでいる *)
     "("
     ^ String.concat ","
-        (List.filter (fun l -> String.length l > 0) [normal_args; last_args; gpu_args])
+        (List.filter
+           (fun l -> String.length l > 0)
+           [normal_args; last_args; gpu_args])
     ^ ")"
   in
   modification ^ " " ^ kernel_name ^ args ^ ";"
