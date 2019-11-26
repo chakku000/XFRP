@@ -25,10 +25,12 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
       (function Node ((i, t), _, _) -> Hashtbl.add tbl i t | _ -> ())
       ast.definitions ;
     List.iter (function i, t -> Hashtbl.add tbl i t) ast.in_nodes ;
+    List.iter
+      (function GNode ((i, t), _, _, _) -> Hashtbl.add tbl i t | _ -> ())
+      ast.definitions ;
     tbl
   in
   let rec collect_node_deps e =
-    (* TODO: fix. GNodeからアクセスするNodeを列挙しているが、名前しか取っていないので型が必要 *)
     match e with
     | GSelf ->
         StringSet.empty
@@ -77,8 +79,29 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
              (collect_node_atlast_deps e1)
              (collect_node_atlast_deps e2))
   in
+  let rec collect_gnode_deps e =
+    match e with
+    | GSelf ->
+        StringSet.empty
+    | GConst _ ->
+        StringSet.empty
+    | Gid _ ->
+        StringSet.empty
+    | GAnnot _ ->
+        StringSet.empty
+    | Gbin (_, e1, e2) ->
+        StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2)
+    | GApp (_, el) ->
+        List.fold_left
+          (fun acc elm -> StringSet.union acc (collect_gnode_deps elm))
+          StringSet.empty el
+    | Gif (ce, e1, e2) ->
+        StringSet.union (collect_gnode_deps ce)
+          (StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2))
+  in
   let node_set = collect_node_deps expr in
   let node_atlast_set = collect_node_atlast_deps expr in
+  let gnode_set = collect_gnode_deps expr in
   Hashtbl.iter
     (fun k v -> Printf.printf "%s - %s\n" k (Type.of_string v))
     id_to_type_table ;
@@ -99,6 +122,7 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
     |> String.concat ","
   in
   let args =
+    (* 順序は @lastがついてないノード -> @lastがついているノード -> gnodeの引数 となる. それぞれの中では辞書順で並んでいる *)
     "("
     ^ String.concat ","
         (List.filter (fun l -> String.length l > 0) [normal_args; last_args])

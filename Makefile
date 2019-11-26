@@ -9,7 +9,7 @@
 # - _tags file introduces packages, bin_annot flag for tool chain
 # - using *.mll and *.mly are handled automatically
 
-.PHONY: 	all clean byte native profile debug sanity test
+.PHONY: 	all clean byte native profile debug sanity test format
 
 OCB_FLAGS   = -use-ocamlfind -use-menhir -I src -I src/codegen -I src/codegen_p -I lib -pkg ppx_deriving.show # uses menhir
 OCB = ocamlbuild $(OCB_FLAGS)
@@ -33,6 +33,9 @@ debug: sanity
 
 test: sanity
 	$(OCB) test.native
+
+format: sanity
+	ocamlformat -i src/*.ml --enable-outside-detected-project
 
 # check that menhir is installed, use "opam install menhir"
 sanity:

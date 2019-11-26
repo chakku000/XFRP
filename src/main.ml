@@ -30,15 +30,23 @@ let compile in_c : string =
     (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
     (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
     (* print_endline p; *)
-    let program = Module.ast_to_program ast in     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
-    let code : string = Codegen.code_of_ast ast program in (* C/C++のソースコード *)
+    let program = Module.ast_to_program ast in
+    (* programはastからデータを構築.ここでデータは依存関係だったり... *)
+    let code : string = Codegen.code_of_ast ast program in
+    (* C/C++のソースコード *)
     (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
     let graph = program.graph in
-    Hashtbl.iter (fun k v -> print_int k; print_string "->";
-                             Module.print_intset v; print_newline ()) graph;
+    Hashtbl.iter
+      (fun k v ->
+        print_int k ;
+        print_string "->" ;
+        Module.print_intset v ;
+        print_newline ())
+      graph ;
     code
   with
-  | Lexer.Error msg -> raise (CompileError ("Lexing error: " ^ msg))
+  | Lexer.Error msg ->
+      raise (CompileError ("Lexing error: " ^ msg))
   | Parser.Error ->
       let pos = lexbuf.lex_curr_p in
       raise
@@ -52,11 +60,13 @@ let main () =
     let input : in_channel =
       open_in
         ( match !input_file with
-        | Some s -> s
-        | None -> raise (CommandError "Input file is not specified.") )
+        | Some s ->
+            s
+        | None ->
+            raise (CommandError "Input file is not specified.") )
     in
     let c_code = compile input in
-    print_endline "======================================";
+    print_endline "======================================" ;
     print_endline c_code
   with CommandError msg -> Printf.eprintf "Command Error: %s" msg
 
