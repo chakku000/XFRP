@@ -121,11 +121,19 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
              nd)
     |> String.concat ","
   in
+  let gpu_args = 
+    StringSet.elements gnode_set
+    |> List.map (fun nd -> 
+        Printf.sprintf "%s* %s"
+        (Hashtbl.find id_to_type_table nd |> Type.of_string)
+        nd)
+    |> String.concat "n"
+  in
   let args =
     (* 順序は @lastがついてないノード -> @lastがついているノード -> gnodeの引数 となる. それぞれの中では辞書順で並んでいる *)
     "("
     ^ String.concat ","
-        (List.filter (fun l -> String.length l > 0) [normal_args; last_args])
+        (List.filter (fun l -> String.length l > 0) [normal_args; last_args; gpu_args])
     ^ ")"
   in
   modification ^ " " ^ kernel_name ^ args ^ ";"
