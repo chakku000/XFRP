@@ -99,12 +99,26 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
         StringSet.union (collect_gnode_deps ce)
           (StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2))
   in
+  let rec collect_gnode_atlast_deps e =
+    match e with
+    | GSelf | GConst _ | Gid _ | GAnnot _ | GIdAt _ ->
+        StringSet.empty
+    | GIdAtAnnot (id, _, _) ->
+        StringSet.singleton id
+    | Gbin (_, e1, e2) ->
+        StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2)
+    | GApp (_, el) ->
+        List.fold_left
+          (fun acc elm -> StringSet.union acc (collect_gnode_deps elm))
+          StringSet.empty el
+    | Gif (ce, e1, e2) ->
+        StringSet.union (collect_gnode_deps ce)
+          (StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2))
+  in
   let node_set = collect_node_deps expr in
   let node_atlast_set = collect_node_atlast_deps expr in
   let gnode_set = collect_gnode_deps expr in
-  Hashtbl.iter
-    (fun k v -> Printf.printf "%s - %s\n" k (Type.of_string v))
-    id_to_type_table ;
+  let gnode_atlast_ast = collect_gnode_atlast_deps expr in
   let normal_args =
     StringSet.elements node_set
     |> List.map (fun nd ->
@@ -129,13 +143,22 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
              nd)
     |> String.concat "n"
   in
+  let gpu_atlast_args =
+    StringSet.elements gnode_atlast_ast
+    |> List.map (fun nd ->
+           Printf.sprintf "%s* %s_ATLAST"
+             (Hashtbl.find id_to_type_table nd |> Type.of_string)
+             nd)
+    |> String.concat "\n"
+  in
   let args =
     (* 順序は @lastがついてないノード -> @lastがついているノード -> gnodeの引数 となる. それぞれの中では辞書順で並んでいる *)
     "("
     ^ String.concat ","
         (List.filter
            (fun l -> String.length l > 0)
-           [normal_args; last_args; gpu_args])
+           [normal_args; last_args; gpu_args; gpu_atlast_args])
     ^ ")"
   in
-  modification ^ " " ^ kernel_name ^ args ^ ";"
+  modification ^ " " ^ kernel_name ^ args ^ "{\n" ^ "\t" ^ self_index_expr
+  ^ "\n" ^ "}"
