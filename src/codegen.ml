@@ -48,12 +48,6 @@ let rec string_of_c_ast (ast : c_ast) : string =
   | CodeList codes ->
       List.map string_of_c_ast codes |> String.concat " :: "
 
-let unique_index = ref 0
-
-let get_unique_name () : string =
-  let id = string_of_int !unique_index in
-  unique_index := !unique_index + 1 ;
-  "tmp_" ^ id
 
 let header_list = ["stdio.h"; "stdlib.h"]
 
@@ -89,6 +83,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   in
   input ^ "\n" ^ node ^ "\n" ^ gnode
 
+(* XFRPの式 -> C言語のAST *)
 let rec expr_to_clang (e : expr) : c_ast * c_ast =
   match e with
   | EConst e ->
@@ -129,6 +124,7 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
           , expr_to_clang else_expr )
       , Variable res_var )
 
+(* C言語のASTからC言語のコード *)
 let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
   let tab = String.make tabs '\t' in
   match ast with
