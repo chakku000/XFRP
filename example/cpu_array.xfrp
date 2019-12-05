@@ -1,0 +1,7 @@
+module CPUArray
+in  inary@1024 : Int      # 入力ノードでも配列は使用可能
+out oary@1024 : Int      # 出力ノードでも配列を使用可能
+
+node init[false] hoge@2048 : Bool = if inary[self/2] > 10 then true else false
+
+node oary@1024 : Int = if oary[self] then 1 else -1
