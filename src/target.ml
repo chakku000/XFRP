@@ -40,4 +40,4 @@ let rec xfrp_to_g_ast (expr : Syntax.gexpr) : ast * ast =
       let index_ast_pre,index_ast_post = xfrp_to_g_ast e_index in
       let index_temp = get_unique_name () in
       (Assignment(Some(Type.TInt),index_temp,index_ast_post),Var(Printf.sprintf "%s_ATLAST[%s]" id index_temp))
-  | _ -> Empty (* TODO 実装 *)
+  | _ -> (Empty,Empty) (* TODO 実装 *)

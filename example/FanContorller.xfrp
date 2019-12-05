@@ -2,6 +2,7 @@ module FanController    # module name
 in  tmp: Float,         # temperature sensor
     hmd: Float          # humidity sensor
 out fan: Bool           # fan switch
+use
 
 # discomfort index
 node di:Float = 0.81*tmp+0.01*hmd*(0.99*tmp-14.3)+46.3

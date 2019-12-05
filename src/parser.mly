@@ -11,7 +11,7 @@
 (* 記号 *)
 %token COMMA COLON (* AT SEMICOLON *)
 (* 演算 *)
-%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 (* OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
+%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 LT RT LTE RTE (* OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
 (* 識別子 *)
 %token <string> ID
 (* 数値 *)
@@ -27,7 +27,7 @@
 %right prec_if
 (* %left  OR *)
 %left  EQUAL2
-(* %left  LTE LT RTE RT *)
+%left  LTE LT RTE RT
 %left  PLUS MINUS
 %left  ASTERISK SLASH PERCENT
 
@@ -35,8 +35,8 @@
 
 top :
   | MODULE id = ID
-    IN innodes  = separated_list(COMMA,id_and_type)
-    OUT outnodes= separated_list(COMMA,id_and_type)
+    IN innodes  = separated_list(COMMA,input_definition)
+    OUT outnodes= separated_list(COMMA,output_definition)
     USE modules = separated_list(COMMA,ID)
     defs = nonempty_list(definition)
   EOF
@@ -50,12 +50,16 @@ top :
     }
   }
 
+(* Internal / Output Node *)
 definition :
   | NODE 
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      (* ito = id_and_type_opt EQUAL e = expr *)
-      it = id_and_type EQUAL e = expr
-      { Node(it,init,e) }
+      i = ID n = option(AT num = INT {num}) COLON t = type_specific EQUAL e = expr
+      {
+        match n with
+        | None -> Node((i,t),init,e)
+        | Some(n) -> NodeA((i,t),n,init,e)
+      }
   | GNODE (* gnode@1024 init[0] x: Int = ... *)
       AT n = INT
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
@@ -64,9 +68,12 @@ definition :
 
 (* ---------- Node or Function Expression ---------- *)
 expr :
+  | SELF            { ESelf }
   | constant        { EConst($1) }
   | id = ID         { Eid(id) }
+  | id = ID LBRACKET e = expr RBRACKET { EidA(id,e) }
   | id = ID AT a = annotation { EAnnot(id,a) }
+  | id = ID AT a = annotation LBRACKET e = expr RBRACKET { EAnnotA(id,a,e) }
   | expr binop expr { Ebin($2,$1,$3) }
   | LPAREN expr RPAREN { $2 }
   | IF cond = expr THEN e1 = expr ELSE e2 = expr %prec prec_if { Eif(cond,e1,e2) } (* %prec prec_if down the priority of if statement *)
@@ -96,10 +103,6 @@ init_args :
 id_and_type : 
   | id = ID COLON t = type_specific { (id,t) }
 
-(* id_and_type_opt: *)
-(*   | id = ID COLON t = type_specific { (id,Some t) } *)
-(*   | id = ID { (id,None) } *)
-
 type_specific :
   | t = prime_type_specific { t }
 
@@ -115,6 +118,24 @@ prime_type_specific :
     }
 
 
+(* --------------- Input --------------- *)
+input_definition:
+  | i = ID n = option(AT num=INT {num}) COLON t = type_specific
+      {
+        match n with 
+        | None -> Single(i,t)
+        | Some(num) -> Array((i,t),num)
+      }
+
+(* --------------- Output --------------- *)
+output_definition:
+  | i = ID n = option(AT num=INT {num}) COLON t = type_specific
+      {
+        match n with 
+        | None -> Single(i,t)
+        | Some(num) -> Array((i,t),num)
+      }
+
 (* -------------- Operator ---------------- *)
 %inline
 binop:
@@ -124,6 +145,10 @@ binop:
   | SLASH   { BDiv }
   | PERCENT { BMod }
   | EQUAL2  { BEq }
+  | RTE     { BRte }
+  | RT      { BRt }
+  | LTE     { BLte }
+  | LT      { BLt }
 
 
 annotation:

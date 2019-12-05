@@ -1,3 +1,4 @@
+open Syntax
 exception Unreachable of string
 
 module IntSet = Set.Make (Int)
@@ -63,6 +64,8 @@ let construct_graph :
         nodeexpr_to_parent e
     | GNode (_, _, _, e) ->
         gnodeexpr_to_parent e
+    | NodeA _ -> (* TODO Impl *)
+        IntSet.empty
   in
   (* get_name: ノードの定義から名前を取ってくる *)
   let get_name : Syntax.definition -> Syntax.id = function
@@ -70,6 +73,8 @@ let construct_graph :
         i
     | GNode ((i, _), _, _, _) ->
         i
+    | NodeA _ -> 
+        "NodeA"
   in
   (* Utils.print_hstbl idtable (fun x -> print_string x) (fun x -> print_int x) ; *)
   let update_table def =
@@ -80,10 +85,9 @@ let construct_graph :
   graph
 
 (* ASTから依存関係を抽出 *)
-let ast_to_program : Syntax.ast -> program =
- fun ast ->
-  let input = List.map (fun (i, t) -> i) ast.in_nodes in
-  let output = List.map (fun (i, t) -> i) ast.out_nodes in
+let ast_to_program : Syntax.ast -> program = fun ast ->
+  let input = List.map Syntax.name_of_cpunode ast.in_nodes in
+  let output = List.map Syntax.name_of_cpunode ast.out_nodes in
   (* nodeのリストを構築 *)
   let node =
     let filter_function = function

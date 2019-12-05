@@ -34,6 +34,10 @@ rule read = parse
   | '%'               { PERCENT }
   | '*'               { ASTERISK }
   | '/'               { SLASH }
+  | ">="              { RTE }
+  | "<="              { LTE }
+  | '>'               { RT }
+  | '<'               { LT }
   | '@'               { AT }
   | "module"          { MODULE }
   | "in"              { IN }

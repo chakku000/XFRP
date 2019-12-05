@@ -19,6 +19,14 @@ type c_ast =
       (c_ast * c_ast) (* else (pre,post) *)
   | CodeList of c_ast list
 
+
+(* 唯一の識別子を与える *)
+let unique_index = ref 0
+let get_unique_name () : string =
+  let id = string_of_int !unique_index in
+  unique_index := !unique_index + 1 ;
+  "tmp_" ^ id
+
 let rec string_of_c_ast (ast : c_ast) : string =
   match ast with
   | Empty ->
@@ -55,9 +63,15 @@ let header_code () =
   List.map (fun s -> "#include<" ^ s ^ ">") header_list |> String.concat "\n"
 
 let global_variable (ast : Syntax.ast) (prg : Module.program) =
+  let cpunode_to_variable = function
+    | Single(i,t) -> 
+        Printf.sprintf "%s %s[2];" (Type.of_string t) i
+    | Array((i,t),n) -> 
+        Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n
+  in
   let input =
     List.map
-      (fun (id, typ) -> Printf.sprintf "%s %s[2];" (Type.of_string typ) id)
+    cpunode_to_variable
       ast.in_nodes
     |> String.concat "\n"
   in
@@ -86,6 +100,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
 (* XFRPの式 -> C言語のAST *)
 let rec expr_to_clang (e : expr) : c_ast * c_ast =
   match e with
+  | ESelf -> (Empty, Variable("self"))
   | EConst e ->
       (Empty, Const (Syntax.string_of_const e))
   | Eid i ->

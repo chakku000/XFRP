@@ -4,6 +4,14 @@ type id = string
 
 type id_and_type = id * Type.t
 
+type cpu_node_type = 
+  | Single of id_and_type
+  | Array of id_and_type * int
+
+let name_of_cpunode = function
+  | Single (i,_) -> i
+  | Array ((i,_),_) -> i
+
 let string_of_id_and_type (i, t) =
   "id_and_type(" ^ i ^ " , " ^ Type.of_string t ^ ")"
 
@@ -70,9 +78,12 @@ let string_of_binop : binop -> string = function
       ">"
 
 type expr =
+  | ESelf
   | EConst of const
   | Eid of id
+  | EidA of id * expr
   | EAnnot of id * annot
+  | EAnnotA of id * annot * expr
   | Ebin of binop * expr * expr
   | EApp of id * expr list
   | Eif of expr * expr * expr
@@ -89,11 +100,18 @@ type gexpr =
   | Gif of gexpr * gexpr * gexpr
 
 let rec string_of_expr = function
+  | ESelf -> 
+      "ESelf"
   | EConst c ->
       "EConst( " ^ string_of_const c ^ " )"
   | Eid i ->
-      Printf.printf "poi %s\n" i ;
       "Eid( " ^ i ^ ")"
+  | EidA (i,e) -> 
+      Printf.sprintf "EidA( %s , %s )" i (string_of_expr e)
+  | EAnnot (id, an) ->
+      "EAnnot(" ^ id ^ string_of_annot an ^ ")"
+  | EAnnotA (i,_,e) -> 
+      Printf.sprintf "EAnnotA(%s, %s)" i (string_of_expr e)
   | Ebin (op, e1, e2) ->
       "Ebin (" ^ string_of_binop op ^ "){ " ^ string_of_expr e1 ^ " op "
       ^ string_of_expr e2 ^ " }"
@@ -104,8 +122,6 @@ let rec string_of_expr = function
   | Eif (cond, e1, e2) ->
       "Eif{ cond =  " ^ string_of_expr cond ^ " }{ then = " ^ string_of_expr e1
       ^ "}{ else = " ^ string_of_expr e2 ^ "}"
-  | EAnnot (id, an) ->
-      "EAnnot(" ^ id ^ string_of_annot an ^ ")"
 
 let rec string_of_gexpr = function
   | GSelf ->
@@ -133,6 +149,7 @@ let rec string_of_gexpr = function
 
 type definition =
   | Node of id_and_type * expr option (* init *) * expr
+  | NodeA of id_and_type * int * expr option * expr
   | GNode of id_and_type * int * expr option (* init *) * gexpr
 
 (* | Fun  of (id * Type.t * id list * Type.t list) * expr *)
@@ -151,10 +168,11 @@ let string_of_definition = function
   | GNode (it, n, None, e) ->
       "GNode {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = " ^ "NONE"
       ^ "\n\texpr = " ^ string_of_gexpr e ^ "\n}"
+  | _ -> "NodeA is notimplmented"
 
 type ast =
   { module_id: moduleid
-  ; in_nodes: id_and_type list
-  ; out_nodes: id_and_type list
+  ; in_nodes: cpu_node_type list
+  ; out_nodes: cpu_node_type list
   ; use: moduleid list
   ; definitions: definition list }
