@@ -30,6 +30,7 @@
 %left  LTE LT RTE RT
 %left  PLUS MINUS
 %left  ASTERISK SLASH PERCENT
+%right prec_uni
 
 %%
 
@@ -70,6 +71,7 @@ definition :
 expr :
   | SELF            { ESelf }
   | constant        { EConst($1) }
+  | MINUS expr %prec prec_uni { EUni(UNeg,$2) }
   | id = ID         { Eid(id) }
   | id = ID LBRACKET e = expr RBRACKET { EidA(id,e) }
   | id = ID AT a = annotation { EAnnot(id,a) }

@@ -5,8 +5,10 @@ type c_ast =
   | Empty
   | Const of string
   | Variable of string (* 変数 *)
+  | VariableA of string * c_ast (* 配列 *)
   | VarDec of Type.t * string (* 変数宣言 *)
   | Assignment of Type.t option * string * c_ast (* 変数への代入. もしType.tがNoneならば宣言済みの変数. そうでなければ変数宣言と同時に代入 *)
+  | Uniop of string * c_ast
   | Binop of string * c_ast * c_ast
   | Call of string * c_ast list
   | If of
@@ -37,12 +39,17 @@ let rec string_of_c_ast (ast : c_ast) : string =
       Printf.sprintf "VarDec[ %s ][ %s ]" (Type.of_string t) i
   | Variable v ->
       Printf.sprintf "Var[ %s ]" v
+  | VariableA (i,c) -> 
+      Printf.sprintf "%s[%s]" i (string_of_c_ast c)
   | Assignment (t, var, ast) ->
       let typename =
         match t with None -> "None" | Some t -> Type.of_string t
       in
       Printf.sprintf "Assignment[ %s ][ %s ][ %s ]" typename var
         (string_of_c_ast ast)
+  | Uniop(uniop,e) -> 
+      let c = string_of_c_ast e in
+      Printf.sprintf "%s(%s)" uniop c
   | Binop (op, ast1, ast2) ->
       Printf.sprintf "Binop[ %s ][ %s ][ %s ]" op (string_of_c_ast ast1)
         (string_of_c_ast ast2)
@@ -78,8 +85,9 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   let node =
     List.filter_map
       (function
-        | Syntax.Node ((i, t), _, _) ->
+        | Node ((i, t), _, _) ->
             Some (Printf.sprintf "%s %s[2];" (Type.of_string t) i)
+        | NodeA ((i, t),n,_,_) -> Some( Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n)
         | _ ->
             None)
       ast.definitions
@@ -95,7 +103,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
       ast.definitions
     |> String.concat "\n"
   in
-  input ^ "\n" ^ node ^ "\n" ^ gnode
+  List.filter (fun s -> (String.length s) > 0) [input; node; gnode] |> String.concat "\n"
 
 (* XFRPの式 -> C言語のAST *)
 let rec expr_to_clang (e : expr) : c_ast * c_ast =
@@ -105,8 +113,14 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
       (Empty, Const (Syntax.string_of_const e))
   | Eid i ->
       (Empty, Variable (i ^ "[turn]"))
+  | EidA (i,e) -> (* e:添字 *)
+      let pre, post = expr_to_clang e in
+      (pre, VariableA(Printf.sprintf "%s[turn]" i,post))
   | EAnnot (id, annot) ->
       (Empty, Variable (id ^ "[turn^1]"))
+  | EAnnotA (i, _ , indexe) -> 
+      let pre, post = expr_to_clang indexe in
+      (pre, VariableA(Printf.sprintf "%s[turn^1]" i,post))
   | Ebin (op, e1, e2) ->
       let op_symbol = string_of_binop op in
       let pre1, cur1 = expr_to_clang e1 in
@@ -123,6 +137,10 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
             CodeList [pre1; pre2]
       in
       (pre, Binop (op_symbol, cur1, cur2))
+  | EUni(uni,e) -> 
+      let opsym = string_of_uniop uni in
+      let pre,post = expr_to_clang e in
+      (pre, Uniop(opsym, post))
   | EApp (f, args) ->
       let maped = List.map expr_to_clang args in
       let pre : c_ast list = List.map (fun (p, _) -> p) maped in
@@ -149,12 +167,16 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
       s
   | Variable v ->
       v
+  | VariableA (i, c) -> 
+      Printf.sprintf "%s[%s]" i (string_of_c_ast c)
   | VarDec (t, v) ->
       Printf.sprintf "%s %s;" (Type.of_string t) v
   | Assignment (_, var, ca) ->
       (* int a = ??? *)
       let right = code_of_c_ast ca tabs in
       tab ^ var ^ "=" ^ right ^ ";"
+  | Uniop (op, c) -> 
+      Printf.sprintf "%s(%s)" op (string_of_c_ast c)
   | Binop (op, ast1, ast2) ->
       Printf.sprintf "(%s %s %s)" (code_of_c_ast ast1 0) op
         (code_of_c_ast ast2 0)
@@ -316,5 +338,5 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
   in
   let main = main_code in
   let setup = setup_code ast prg in
-  String.concat "\n\n"
-    [header; variables; node_update; gnode_update_kernel; setup; main]
+  List.filter (fun s -> s != "") [header; variables; node_update; gnode_update_kernel; setup; main]
+        |> String.concat "\n\n"

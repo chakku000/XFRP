@@ -21,7 +21,7 @@ type program =
     output: Syntax.id list
   ; (* list of identifier of output node *)
     node: Syntax.id list
-  ; (* list of identifier of nodes. It includes input, output, and othre nodes. Not that gnode is not contained *)
+  ; (* list of identifier of nodes. It includes input, output, and internal nodes. Not that gnode is not contained *)
     gnode: Syntax.id list
   ; (* list of gpu node *)
     id_table: (string, int) Hashtbl.t
@@ -69,12 +69,9 @@ let construct_graph :
   in
   (* get_name: ノードの定義から名前を取ってくる *)
   let get_name : Syntax.definition -> Syntax.id = function
-    | Node ((i, _), _, _) ->
-        i
-    | GNode ((i, _), _, _, _) ->
-        i
-    | NodeA _ -> 
-        "NodeA"
+    | Node ((i, _), _, _) -> i
+    | GNode ((i, _), _, _, _) -> i
+    | NodeA ((i,_),_,_,_) ->  i
   in
   (* Utils.print_hstbl idtable (fun x -> print_string x) (fun x -> print_int x) ; *)
   let update_table def =
@@ -90,40 +87,18 @@ let ast_to_program : Syntax.ast -> program = fun ast ->
   let output = List.map Syntax.name_of_cpunode ast.out_nodes in
   (* nodeのリストを構築 *)
   let node =
-    let filter_function = function
-      (* Nodeだけ取得する関数 *)
-      | Syntax.Node (_, _, _) ->
-          true
-      | _ ->
-          false
+    let internal_and_output = 
+      List.filter_map
+        (function
+          | Node ((i,_),_,_) -> Some(i)
+          | NodeA ((i,_),_,_,_) -> Some(i)
+          | GNode _ -> None
+        ) ast.definitions
     in
-    let node_list = List.filter filter_function ast.definitions in
-    let map_function = function
-      | Syntax.Node ((i, t), _, _) ->
-          i
-      | _ ->
-          raise (Unreachable "unreachable code")
-    in
-    input @ List.map map_function node_list
-    (* definitionsのNodeにinputノードを追加したもの*)
+    input @ internal_and_output
   in
   (* gpu nodeのリストを構築 *)
-  let gnode =
-    let filter_function = function
-      | Syntax.GNode (_, _, _, _) ->
-          true
-      | _ ->
-          false
-    in
-    let map_function = function
-      | Syntax.GNode ((i, t), _, _, _) ->
-          i
-      | _ ->
-          raise (Unreachable "unreachable code")
-    in
-    let filtered = List.filter filter_function ast.definitions in
-    List.map map_function filtered
-  in
+  let gnode = List.filter_map (function GNode((i,_),_,_,_) -> Some(i) | _ -> None) ast.definitions in
   let id_table = construct_id_table node gnode in
   let graph : (int, IntSet.t) Hashtbl.t = construct_graph ast id_table in
   Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ;
