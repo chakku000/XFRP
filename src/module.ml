@@ -1,4 +1,5 @@
 open Syntax
+
 exception Unreachable of string
 
 module IntSet = Set.Make (Int)
@@ -64,14 +65,18 @@ let construct_graph :
         nodeexpr_to_parent e
     | GNode (_, _, _, e) ->
         gnodeexpr_to_parent e
-    | NodeA _ -> (* TODO Impl *)
+    | NodeA _ ->
+        (* TODO Impl *)
         IntSet.empty
   in
   (* get_name: ノードの定義から名前を取ってくる *)
   let get_name : Syntax.definition -> Syntax.id = function
-    | Node ((i, _), _, _) -> i
-    | GNode ((i, _), _, _, _) -> i
-    | NodeA ((i,_),_,_,_) ->  i
+    | Node ((i, _), _, _) ->
+        i
+    | GNode ((i, _), _, _, _) ->
+        i
+    | NodeA ((i, _), _, _, _) ->
+        i
   in
   (* Utils.print_hstbl idtable (fun x -> print_string x) (fun x -> print_int x) ; *)
   let update_table def =
@@ -82,26 +87,34 @@ let construct_graph :
   graph
 
 (* ASTから依存関係を抽出 *)
-let ast_to_program : Syntax.ast -> program = fun ast ->
+let ast_to_program : Syntax.ast -> program =
+ fun ast ->
   let input = List.map Syntax.name_of_cpunode ast.in_nodes in
   let output = List.map Syntax.name_of_cpunode ast.out_nodes in
   (* nodeのリストを構築 *)
   let node =
-    let internal_and_output = 
+    let internal_and_output =
       List.filter_map
         (function
-          | Node ((i,_),_,_) -> Some(i)
-          | NodeA ((i,_),_,_,_) -> Some(i)
-          | GNode _ -> None
-        ) ast.definitions
+          | Node ((i, _), _, _) ->
+              Some i
+          | NodeA ((i, _), _, _, _) ->
+              Some i
+          | GNode _ ->
+              None)
+        ast.definitions
     in
     input @ internal_and_output
   in
   (* gpu nodeのリストを構築 *)
-  let gnode = List.filter_map (function GNode((i,_),_,_,_) -> Some(i) | _ -> None) ast.definitions in
+  let gnode =
+    List.filter_map
+      (function GNode ((i, _), _, _, _) -> Some i | _ -> None)
+      ast.definitions
+  in
   let id_table = construct_id_table node gnode in
   let graph : (int, IntSet.t) Hashtbl.t = construct_graph ast id_table in
-  Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ;
+  (* Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ; *)
   {id= ast.module_id; input; output; node; gnode; id_table; graph}
 
 let print_program prog : unit =

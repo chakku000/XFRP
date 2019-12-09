@@ -1,22 +1,27 @@
 open Syntax
+
 (* CPUノード,GPUノードのノード名からその型へのマップ *)
-let create_id_type_dict (ast : Syntax.ast) : (Syntax.id, Type.t) Hashtbl.t = 
+let create_id_type_dict (ast : Syntax.ast) : (Syntax.id, Type.t) Hashtbl.t =
   let tbl = Hashtbl.create 128 in
   (* check Input Node *)
   List.iter
     (function
-      | Single (i,t) -> Hashtbl.add tbl i t
-      | Array ((i,t),_) -> Hashtbl.add tbl i t) 
-    ast.in_nodes;
+      | Single (i, t) ->
+          Hashtbl.add tbl i t
+      | Array ((i, t), _) ->
+          Hashtbl.add tbl i t)
+    ast.in_nodes ;
   (* TODO check Output/Internal Node *)
   List.iter
     (function
-      | Node((i,t),_,_) -> Hashtbl.add tbl i t
-      | NodeA((i,t),_,_,_) -> Hashtbl.add tbl i t
-      | GNode((i,t),_,_,_) -> Hashtbl.add tbl i t)
-    ast.definitions;
+      | Node ((i, t), _, _) ->
+          Hashtbl.add tbl i t
+      | NodeA ((i, t), _, _, _) ->
+          Hashtbl.add tbl i t
+      | GNode ((i, t), _, _, _) ->
+          Hashtbl.add tbl i t)
+    ast.definitions ;
   tbl
-
 
 let print_list (lst : 'a list) (print_value : 'a -> unit) : unit =
   print_char '[' ;
@@ -33,3 +38,7 @@ let print_hstbl (tbl : ('a, 'b) Hashtbl.t) (print_key : 'a -> unit)
     print_char ')'
   in
   Hashtbl.iter (fun k v -> print k v ; print_newline ()) tbl
+
+(* String.concatをするがその際にemptyな文字列は無視する *)
+let concat_without_empty (del : string) (lst : string list) =
+  List.filter (fun s -> String.length s > 0) lst |> String.concat del

@@ -36,13 +36,13 @@ let compile in_c : string =
     (* C/C++のソースコード *)
     (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
     let graph = program.graph in
-    Hashtbl.iter
-      (fun k v ->
-        print_int k ;
-        print_string "->" ;
-        Module.print_intset v ;
-        print_newline ())
-      graph ;
+    (* Hashtbl.iter *)
+    (*   (fun k v -> *)
+    (*     (1* print_int k ; *1) *)
+    (*     (1* print_string "->" ; *1) *)
+    (*     (1* Module.print_intset v ; *1) *)
+    (*     print_newline ()) *)
+    (*   graph ; *)
     code
   with
   | Lexer.Error msg ->
@@ -66,7 +66,7 @@ let main () =
             raise (CommandError "Input file is not specified.") )
     in
     let c_code = compile input in
-    print_endline "======================================" ;
+    (* print_endline "======================================" ; *)
     print_endline c_code
   with CommandError msg -> Printf.eprintf "Command Error: %s" msg
 

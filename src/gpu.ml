@@ -14,9 +14,6 @@ let self_index_expr = "int self = blockIdx.x * blockDim.x + threadIdx.x;"
 (*       let pre1, post1 = transform_to_c expr1 in *)
 (*       let pre2, post2 = transform_to_c expr2 in *)
 
-
-
-
 let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
     (ast : Syntax.ast) (program : Module.program) : string =
   let modification = "__global__" in

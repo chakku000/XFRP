@@ -4,13 +4,9 @@ type id = string
 
 type id_and_type = id * Type.t
 
-type cpu_node_type = 
-  | Single of id_and_type
-  | Array of id_and_type * int
+type cpu_node_type = Single of id_and_type | Array of id_and_type * int
 
-let name_of_cpunode = function
-  | Single (i,_) -> i
-  | Array ((i,_),_) -> i
+let name_of_cpunode = function Single (i, _) -> i | Array ((i, _), _) -> i
 
 let string_of_id_and_type (i, t) =
   "id_and_type(" ^ i ^ " , " ^ Type.of_string t ^ ")"
@@ -78,8 +74,8 @@ let string_of_binop : binop -> string = function
       ">"
 
 type uniop = UNeg
-let string_of_uniop = function
-  | UNeg -> "-"
+
+let string_of_uniop = function UNeg -> "-"
 
 type expr =
   | ESelf
@@ -105,19 +101,19 @@ type gexpr =
   | Gif of gexpr * gexpr * gexpr
 
 let rec string_of_expr = function
-  | ESelf -> 
+  | ESelf ->
       "ESelf"
   | EConst c ->
       "EConst( " ^ string_of_const c ^ " )"
   | Eid i ->
       "Eid( " ^ i ^ ")"
-  | EidA (i,e) -> 
+  | EidA (i, e) ->
       Printf.sprintf "EidA( %s , %s )" i (string_of_expr e)
   | EAnnot (id, an) ->
       "EAnnot(" ^ id ^ string_of_annot an ^ ")"
-  | EAnnotA (i,_,e) -> 
+  | EAnnotA (i, _, e) ->
       Printf.sprintf "EAnnotA(%s, %s)" i (string_of_expr e)
-  | EUni (u, e) -> 
+  | EUni (u, e) ->
       Printf.sprintf "EUni(%s, %s)" (string_of_uniop u) (string_of_expr e)
   | Ebin (op, e1, e2) ->
       "Ebin (" ^ string_of_binop op ^ "){ " ^ string_of_expr e1 ^ " op "
@@ -175,7 +171,8 @@ let string_of_definition = function
   | GNode (it, n, None, e) ->
       "GNode {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = " ^ "NONE"
       ^ "\n\texpr = " ^ string_of_gexpr e ^ "\n}"
-  | _ -> "NodeA is notimplmented"
+  | _ ->
+      "NodeA is notimplmented"
 
 type ast =
   { module_id: moduleid
