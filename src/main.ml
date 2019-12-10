@@ -23,26 +23,12 @@ let compile in_c : string =
   let lexbuf = from_channel in_c in
   try
     let ast : Syntax.ast = Parser.top Lexer.read lexbuf in
-    (* let p = "Module_ID = " ^ ast.module_id ^ "\n" ^ "Input Node = [" *)
-    (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.in_nodes) *)
-    (* ^ "]\n" ^ "Output Node = [" *)
-    (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.out_nodes) *)
-    (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
-    (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
-    (* print_endline p; *)
     let program = Module.ast_to_program ast in
     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
     let code : string = Codegen.code_of_ast ast program in
     (* C/C++のソースコード *)
     (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
     let graph = program.graph in
-    (* Hashtbl.iter *)
-    (*   (fun k v -> *)
-    (*     (1* print_int k ; *1) *)
-    (*     (1* print_string "->" ; *1) *)
-    (*     (1* Module.print_intset v ; *1) *)
-    (*     print_newline ()) *)
-    (*   graph ; *)
     code
   with
   | Lexer.Error msg ->
