@@ -28,7 +28,14 @@ let compile in_c : string =
     let code : string = Codegen.code_of_ast ast program in
     (* C/C++のソースコード *)
     (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
-    let graph = program.graph in
+    let module IntSet = Set.Make (Int) in
+    let t = Schedule.construct_graph ast program in
+    Utils.print_hstbl program.id_table print_string print_int ;
+    Utils.print_hstbl t print_int (fun set ->
+        Utils.print_set
+          (module IntSet)
+          set
+          (fun v -> print_int v ; print_char ',')) ;
     code
   with
   | Lexer.Error msg ->

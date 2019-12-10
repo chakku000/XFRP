@@ -33,11 +33,15 @@ let print_hstbl (tbl : ('a, 'b) Hashtbl.t) (print_key : 'a -> unit)
   let print k v : unit =
     print_char '(' ;
     print_key k ;
-    print_char ' ' ;
+    print_string " : " ;
     print_value v ;
     print_char ')'
   in
   Hashtbl.iter (fun k v -> print k v ; print_newline ()) tbl
+
+let print_set (type s t) (module S : Set.S with type elt = s and type t = t)
+    (set : t) (p : s -> unit) : unit =
+  S.iter p set
 
 (* String.concatをするがその際にemptyな文字列は無視する *)
 let concat_without_empty (del : string) (lst : string list) =
