@@ -36,6 +36,8 @@ let compile in_c : string =
           (module IntSet)
           set
           (fun v -> print_int v ; print_char ',')) ;
+    let fsd = Schedule.calc_fsd ast program in
+    Hashtbl.iter (fun k v -> Printf.printf "%d : %d\n" k v) fsd;
     code
   with
   | Lexer.Error msg ->

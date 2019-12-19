@@ -5,7 +5,7 @@ module IntSet = Set.Make (Int)
 (* TODO : Module.program.graphは不要なのでこの実装が終わり次第消しても良い *)
 (* 返り値はノードのIDを使った隣接リスト  *)
 (* a->bと依存関係がある場合, graph[a] = {b} となる *)
-let construct_graph (ast : Syntax.ast) (program : Module.program) =
+let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.t) Hashtbl.t =
   let ptbl = Hashtbl.create 128 in
   (* 親ノードの集合. a->bならptbl[b]={a} *)
   (* Inputノード *)
@@ -63,3 +63,22 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) =
         set)
     ptbl ;
   ptbl
+
+(* 各ノードのFSDを求める関数 *)
+let calc_fsd (ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t = 
+    let graph = construct_graph ast prog in
+    let fsd = Hashtbl.create 128 in
+    let rec dfs (cur : int) : int =
+        if (Hashtbl.mem fsd cur) then (Hashtbl.find fsd cur)
+        else begin
+            let children = Hashtbl.find graph cur in
+            let fsd_value =
+                if (IntSet.is_empty children) then 0
+                else (((IntSet.map dfs children) |> IntSet.max_elt) + 1)
+            in
+            Hashtbl.replace fsd cur fsd_value;
+            fsd_value
+        end
+    in
+    Hashtbl.iter (fun k _ -> let fsdval = dfs k in Hashtbl.replace fsd k fsdval) graph;
+    fsd
