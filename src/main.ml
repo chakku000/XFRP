@@ -43,6 +43,7 @@ let compile in_c : string =
         "[" ^ (String.concat "," lst2) ^ "]"
     in
     Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array;
+    (* C言語のコードを返す *)
     code
   with
   | Lexer.Error msg ->
