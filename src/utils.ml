@@ -41,7 +41,7 @@ let print_hstbl (tbl : ('a, 'b) Hashtbl.t) (print_key : 'a -> unit)
 
 let print_set (type s t) (module S : Set.S with type elt = s and type t = t)
     (set : t) (p : s -> unit) : unit =
-  S.iter p set
+        S.iter (fun v -> p v; print_char ',') set
 
 (* String.concatをするがその際にemptyな文字列は無視する *)
 let concat_without_empty (del : string) (lst : string list) =

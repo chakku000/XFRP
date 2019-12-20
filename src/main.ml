@@ -23,21 +23,26 @@ let compile in_c : string =
   let lexbuf = from_channel in_c in
   try
     let ast : Syntax.ast = Parser.top Lexer.read lexbuf in
-    let program = Module.ast_to_program ast in
     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
-    let code : string = Codegen.code_of_ast ast program in
+    let program = Module.ast_to_program ast in
+
     (* C/C++のソースコード *)
-    (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
-    let module IntSet = Set.Make (Int) in
-    let t = Schedule.construct_graph ast program in
-    Utils.print_hstbl program.id_table print_string print_int ;
-    Utils.print_hstbl t print_int (fun set ->
-        Utils.print_set
-          (module IntSet)
-          set
-          (fun v -> print_int v ; print_char ',')) ;
-    let fsd = Schedule.calc_fsd ast program in
-    Hashtbl.iter (fun k v -> Printf.printf "%d : %d\n" k v) fsd;
+    let code : string = Codegen.code_of_ast ast program in
+
+    (* 各ノードとIDの対応をテスト出力 *)
+    print_endline "-----> ID_TABLE";
+    Hashtbl.iter (fun name id -> Printf.printf "%s : %d\n" name id) program.id_table;
+    print_endline "ID_TABLE <-----";
+
+    (* 各FSDの値のノードのリスト *)
+    let dist_array = Schedule.collect_same_fsd ast program in
+
+    (* dist_arrayの出力 *)
+    let string_of_lst lst = 
+        let lst2 = List.map (fun v -> string_of_int v) lst in
+        "[" ^ (String.concat "," lst2) ^ "]"
+    in
+    Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array;
     code
   with
   | Lexer.Error msg ->
