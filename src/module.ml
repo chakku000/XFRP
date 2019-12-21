@@ -26,8 +26,7 @@ type program =
     gnode: Syntax.id list
   ; (* list of gpu node *)
     id_table: (string, int) Hashtbl.t
-  ; (* Dictinary from node and gnode to index *)
-    graph: (int, IntSet.t) Hashtbl.t (* graph[i] is the set of parent nodes *)
+  ;
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
@@ -39,52 +38,6 @@ let construct_id_table (nodes : Syntax.id list) (gnodes : Syntax.id list) :
 
 (* 依存関係を表すグラフ(隣接リスト)を構築 *)
 (* 依存関係は親ノードの集合を持つ *)
-let construct_graph :
-    Syntax.ast -> (string, int) Hashtbl.t -> (int, IntSet.t) Hashtbl.t =
- fun ast idtable ->
-  let graph : (int, IntSet.t) Hashtbl.t = Hashtbl.create 1024 in
-  (* 通常ノードの親ノードの集合 *)
-  let rec nodeexpr_to_parent : Syntax.expr -> IntSet.t = function
-    | Eid id ->
-        Hashtbl.find idtable id |> IntSet.singleton
-    | Ebin (_, e1, e2) ->
-        IntSet.union (nodeexpr_to_parent e1) (nodeexpr_to_parent e2)
-    | _ ->
-        IntSet.empty
-  in
-  let rec gnodeexpr_to_parent : Syntax.gexpr -> IntSet.t = function
-    | Gid id ->
-        Hashtbl.find idtable id |> IntSet.singleton
-    | Gbin (_, e1, e2) ->
-        IntSet.union (gnodeexpr_to_parent e1) (gnodeexpr_to_parent e2)
-    | _ ->
-        IntSet.empty
-  in
-  let to_parentset : Syntax.definition -> IntSet.t = function
-    | Node (_, _, e) ->
-        nodeexpr_to_parent e
-    | GNode (_, _, _, e) ->
-        gnodeexpr_to_parent e
-    | NodeA _ ->
-        (* TODO Impl *)
-        IntSet.empty
-  in
-  (* get_name: ノードの定義から名前を取ってくる *)
-  let get_name : Syntax.definition -> Syntax.id = function
-    | Node ((i, _), _, _) ->
-        i
-    | GNode ((i, _), _, _, _) ->
-        i
-    | NodeA ((i, _), _, _, _) ->
-        i
-  in
-  (* Utils.print_hstbl idtable (fun x -> print_string x) (fun x -> print_int x) ; *)
-  let update_table def =
-    let id = Hashtbl.find idtable (get_name def) in
-    Hashtbl.add graph id (to_parentset def)
-  in
-  List.iter update_table ast.definitions ;
-  graph
 
 (* ASTから依存関係を抽出 *)
 let ast_to_program : Syntax.ast -> program =
@@ -113,9 +66,8 @@ let ast_to_program : Syntax.ast -> program =
       ast.definitions
   in
   let id_table = construct_id_table node gnode in
-  let graph : (int, IntSet.t) Hashtbl.t = construct_graph ast id_table in
   (* Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ; *)
-  {id= ast.module_id; input; output; node; gnode; id_table; graph}
+  {id= ast.module_id; input; output; node; gnode; id_table; }
 
 let print_program prog : unit =
   Printf.printf "Module : %s\n" prog.id ;

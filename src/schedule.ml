@@ -2,7 +2,6 @@ open Syntax
 module IntSet = Set.Make (Int)
 
 (* 依存グラフの構築 *)
-(* TODO : Module.program.graphは不要なのでこの実装が終わり次第消しても良い *)
 (* 返り値はノードのIDを使った隣接リスト  *)
 (* a->bと依存関係がある場合, graph[a] = {b} となる *)
 let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.t) Hashtbl.t =
