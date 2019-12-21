@@ -1,4 +1,7 @@
 open Syntax
+open Type
+
+exception TypeError of string
 
 module String = struct
   include String
@@ -115,11 +118,52 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   |> String.concat "\n"
 
 (* XFRPの式の型を取得する関数 *)
-(* let rec get_xfrp_expr_type (e : expr) (type_table : (string,Type.t) Hashtbl.t) : Type.t = 
+let rec get_xfrp_expr_type (e : expr) (program : Module.program) : Type.t = 
     match e with
     | ESelf -> Type.TInt
     | EConst value -> type_of_const value
-    | Eid id ->  *)
+    | Eid name -> 
+        let id = Hashtbl.find program.id_table name in
+        let node = Hashtbl.find program.info_table id in
+        node.t
+    | EidA (name,_) -> 
+        let id = Hashtbl.find program.id_table name in
+        let node = Hashtbl.find program.info_table id in
+        node.t
+    | EAnnot (name,_) -> 
+        let id = Hashtbl.find program.id_table name in
+        let node = Hashtbl.find program.info_table id in
+        node.t
+    | EAnnotA (name,_,_) -> 
+        let id = Hashtbl.find program.id_table name in
+        let node = Hashtbl.find program.info_table id in
+        node.t
+    | EUni _ -> TInt
+    | Ebin (op,e1,e2) -> 
+        (match op with 
+        | BEq |BOr |BLte |BLt |BRte |BRt -> Type.TBool
+        | _ -> 
+            let t1 = get_xfrp_expr_type e1 program in
+            let t2 = get_xfrp_expr_type e2 program in
+            let typ = (match (t1,t2) with
+                        | (TFloat,_) -> TFloat
+                        | (_,TFloat) -> TFloat
+                        | (TInt,_) -> TInt
+                        | (_,TInt) -> TInt
+                        | (TChar,_) -> TChar
+                        | (_,TChar) -> TChar
+                        | _ -> TBool)
+            in typ)
+    | EApp (id,_) ->
+        (* TODO 関数を実装していないのでここも実装できない. 関数を実装したら関数の型から返り値を適切に決定できるようにする *)
+        TInt
+    | Eif (_,e1,e2) -> 
+        let t1 = get_xfrp_expr_type e1 program in
+        let t2 = get_xfrp_expr_type e2 program in
+        if t1 == t2 then t1
+                    else raise (TypeError ("In If-expr, the value of then and else are not matched"))
+
+
         
 (* XFRPの式 -> C言語のAST *)
 let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
@@ -166,10 +210,14 @@ let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
       (CodeList pre, Call (f, a))
   | Eif (cond_expr, then_expr, else_expr) ->
       let res_var = get_unique_name () in (* res_var: if式の結果を保存する変数 *)
+      let then_type = get_xfrp_expr_type then_expr program in
+      let else_type = get_xfrp_expr_type else_expr program in
+      Printf.printf "%s <-> %s\n" (Type.of_string then_type) (Type.of_string else_type);
+      let res_type = Type.union_type then_type else_type in
       (* res_varの型はthen_exprとelse_exprの型に一致する *)
       (* もしthen_exprとelse_exprの型が異なればコンパイルエラーにしてよい *)
       ( If
-          ( ( Type.TInt (* TODO この変数の型を確認. 今は暫定的にType.TIntにしている. *), res_var )
+          ( ( res_type, res_var )
           , expr_to_clang cond_expr program
           , expr_to_clang then_expr program
           , expr_to_clang else_expr program )
