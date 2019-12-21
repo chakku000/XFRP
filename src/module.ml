@@ -10,10 +10,11 @@ let print_intset st =
   print_char '}'
 
 type node_t =
-  { id: string
-  ; typ: Type.t option ref
-  ; init: Syntax.expr option
-  ; expr: Syntax.expr }
+    {
+        name : string;
+        t : Type.t;
+        number : int;
+    }
 
 type program =
   { id: Syntax.moduleid
@@ -27,6 +28,7 @@ type program =
   ; (* list of gpu node *)
     id_table: (string, int) Hashtbl.t
   ;
+    info_table : (int,node_t) Hashtbl.t
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
@@ -36,8 +38,24 @@ let construct_id_table (nodes : Syntax.id list) (gnodes : Syntax.id list) :
   List.iteri (fun i n -> Hashtbl.add table n i) (nodes @ gnodes) ;
   table
 
-(* 依存関係を表すグラフ(隣接リスト)を構築 *)
-(* 依存関係は親ノードの集合を持つ *)
+(* 各ノード(ID)とそのノードの情報のテーブルを構築する関数 *)
+let construct_nodeinfo_table (ast : Syntax.ast)
+                             (id_table : (string,int) Hashtbl.t)
+                             : (int,node_t) Hashtbl.t = 
+    let table = Hashtbl.create 128 in
+    List.iter
+        (function
+            | Node ((name,t),_,_) ->
+                let id = Hashtbl.find id_table name in
+                Hashtbl.add table id { name; t; number=1; }
+            | NodeA ((name,t),number,_,_) -> 
+                let id = Hashtbl.find id_table name in
+                Hashtbl.add table id { name; t; number; }
+            | GNode ((name,t), number, _, _) -> 
+                let id = Hashtbl.find id_table name in
+                Hashtbl.add table id { name; t; number; })
+        ast.definitions;
+    table
 
 (* ASTから依存関係を抽出 *)
 let ast_to_program : Syntax.ast -> program =
@@ -66,8 +84,9 @@ let ast_to_program : Syntax.ast -> program =
       ast.definitions
   in
   let id_table = construct_id_table node gnode in
+  let info_table = construct_nodeinfo_table ast id_table in
   (* Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ; *)
-  {id= ast.module_id; input; output; node; gnode; id_table; }
+  {id= ast.module_id; input; output; node; gnode; id_table; info_table; }
 
 let print_program prog : unit =
   Printf.printf "Module : %s\n" prog.id ;

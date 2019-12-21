@@ -108,3 +108,8 @@ let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) arr
         (fun k v -> dist_array.(v) <- dist_array.(v) @ [k])
         fsd_table;
     dist_array
+
+(* どのノードをどのCPUコアが更新するかを決定する *)
+let assign_to_cpu (ast : Syntax.ast) (program: Module.program) =
+    let dist_array = collect_same_fsd ast program in
+    ()

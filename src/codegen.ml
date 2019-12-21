@@ -114,8 +114,15 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
   List.filter String.is_not_empty [turn_vairable; input; node; gnode]
   |> String.concat "\n"
 
+(* XFRPの式の型を取得する関数 *)
+(* let rec get_xfrp_expr_type (e : expr) (type_table : (string,Type.t) Hashtbl.t) : Type.t = 
+    match e with
+    | ESelf -> Type.TInt
+    | EConst value -> type_of_const value
+    | Eid id ->  *)
+        
 (* XFRPの式 -> C言語のAST *)
-let rec expr_to_clang (e : expr) : c_ast * c_ast =
+let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
   match e with
   | ESelf ->
       (Empty, Variable "self")
@@ -125,17 +132,17 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
       (Empty, Variable (i ^ "[turn]"))
   | EidA (i, e) ->
       (* e:添字 *)
-      let pre, post = expr_to_clang e in
+      let pre, post = expr_to_clang e program in
       (pre, VariableA (Printf.sprintf "%s[turn]" i, post))
   | EAnnot (id, annot) ->
       (Empty, Variable (id ^ "[turn^1]"))
   | EAnnotA (i, _, indexe) ->
-      let pre, post = expr_to_clang indexe in
+      let pre, post = expr_to_clang indexe program in
       (pre, VariableA (Printf.sprintf "%s[turn^1]" i, post))
   | Ebin (op, e1, e2) ->
       let op_symbol = string_of_binop op in
-      let pre1, cur1 = expr_to_clang e1 in
-      let pre2, cur2 = expr_to_clang e2 in
+      let pre1, cur1 = expr_to_clang e1 program in
+      let pre2, cur2 = expr_to_clang e2 program in
       let pre =
         match (pre1, pre2) with
         | Empty, Empty ->
@@ -150,22 +157,22 @@ let rec expr_to_clang (e : expr) : c_ast * c_ast =
       (pre, Binop (op_symbol, cur1, cur2))
   | EUni (uni, e) ->
       let opsym = string_of_uniop uni in
-      let pre, post = expr_to_clang e in
+      let pre, post = expr_to_clang e program in
       (pre, Uniop (opsym, post))
   | EApp (f, args) ->
-      let maped = List.map expr_to_clang args in
+      let maped = List.map (fun v -> expr_to_clang v program) args in
       let pre : c_ast list = List.map (fun (p, _) -> p) maped in
       let a : c_ast list = List.map (fun (_, a) -> a) maped in
       (CodeList pre, Call (f, a))
   | Eif (cond_expr, then_expr, else_expr) ->
-      let res_var = get_unique_name () in
+      let res_var = get_unique_name () in (* res_var: if式の結果を保存する変数 *)
+      (* res_varの型はthen_exprとelse_exprの型に一致する *)
+      (* もしthen_exprとelse_exprの型が異なればコンパイルエラーにしてよい *)
       ( If
-          ( ( Type.TInt
-              (* TODO この変数の型を確認. 今は暫定的にType.TIntにしている. *)
-            , res_var )
-          , expr_to_clang cond_expr
-          , expr_to_clang then_expr
-          , expr_to_clang else_expr )
+          ( ( Type.TInt (* TODO この変数の型を確認. 今は暫定的にType.TIntにしている. *), res_var )
+          , expr_to_clang cond_expr program
+          , expr_to_clang then_expr program
+          , expr_to_clang else_expr program )
       , Variable res_var )
 
 (* C言語のASTからC言語のコード *)
@@ -248,17 +255,11 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
       |> String.concat "\n"
 
 (* ノード更新関数を生やす関数 *)
-let generate_node_update_function (name : string) (expr : Syntax.expr) =
+let generate_node_update_function (name : string) (expr : Syntax.expr) (program:Module.program) =
   let declare = Printf.sprintf "void %s_update(){\n" name in
-  let foward, backward = expr_to_clang expr in
+  let foward, backward = expr_to_clang expr program in
   let code1 = code_of_c_ast foward 1 in
   let code2 = code_of_c_ast backward 0 in
-  (* Printf.printf "----- %s ----- \n" name ; *)
-  (* Printf.printf "expr: %s\n" (string_of_expr expr) ; *)
-  (* Printf.printf "foward : %s\n" (string_of_c_ast foward) ; *)
-  (* Printf.printf "backward : %s\n" (string_of_c_ast backward) ; *)
-  (* Printf.printf "cod1: -> %d <-\n" (String.length code1) ; *)
-  (* Printf.printf "cod2: -> %d : %s <-\n" (String.length code2) code2 ; *)
   String.concat ""
     [ declare
     ; (code1 ^ if code1 = "" then "" else "\n")
@@ -266,15 +267,16 @@ let generate_node_update_function (name : string) (expr : Syntax.expr) =
     ; "\n}" ]
 
 (* ノード配列の更新関数を生成する関数 *)
-let generate_nodearray_update (name : string) (expr : Syntax.expr) =
+let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) =
   let declare = Printf.sprintf "void %s_update(int self){" name in
-  let pre, post = expr_to_clang expr in
+  let pre, post = expr_to_clang expr program in
   let code_pre = code_of_c_ast pre 1 in
   let code_post =
     Printf.sprintf "\t%s[turn][self] = %s;" name (code_of_c_ast post 1)
   in
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"]
 
+(* 各ノードの初期化をするC言語のコードを出力する関数 *)
 let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
   (* GNodeの初期化 *)
   let init_gnode =
@@ -290,7 +292,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
             if Option.is_none init then Some malloc
             else
               let tmp = get_unique_name () in
-              let preast, curast = expr_to_clang (Option.get init) in
+              let preast, curast = expr_to_clang (Option.get init) prg in
               let precode = code_of_c_ast preast 1 in
               let curcode =
                 "\tint " ^ tmp ^ " = " ^ code_of_c_ast curast 1 ^ ";"
@@ -309,6 +311,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
     (* |> String.concat "\n" *)
     |> Utils.concat_without_empty "\n"
   in
+  (* CPUノードの初期化を行うコードを出力 *)
   let init_node =
     List.filter_map
       (function
@@ -316,7 +319,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
             if Option.is_none init then None
               (* 初期化指定子が無い場合 *)
             else
-              let preast, curast = expr_to_clang (Option.get init) in
+              let preast, curast = expr_to_clang (Option.get init) prg in
               let precode = code_of_c_ast preast 1 in
               let curcode = code_of_c_ast curast 1 in
               Some
@@ -343,7 +346,7 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
     List.filter_map
       (function
         | Node ((i, t), _, e) ->
-            Some (generate_node_update_function i e)
+            Some (generate_node_update_function i e prg)
         | _ ->
             None)
       ast.definitions
@@ -353,7 +356,7 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
     List.filter_map
       (function
         | NodeA ((i, t), _, _, e) ->
-            Some (generate_nodearray_update i e)
+            Some (generate_nodearray_update i e prg)
         | _ ->
             None)
       ast.definitions

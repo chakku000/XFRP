@@ -36,6 +36,11 @@ let string_of_const = function
   | CFloat f ->
       string_of_float f
 
+let type_of_const = function
+    | CBool _ -> Type.TBool
+    | CInt _ -> Type.TInt
+    | CFloat _ -> Type.TFloat
+
 type binop =
   | BAdd
   | BMinus
