@@ -21,6 +21,7 @@ let union_type t1 t2 =
             | (TFloat,_) when (t2 = TInt || t2 = TChar) -> TFloat
             | (_,TFloat) when (t1 = TInt || t1 = TChar) -> TFloat
             | (TInt,TChar) | (TChar,TInt) -> TInt
+            | (TInt,TBool) | (TBool,TInt) -> TInt
             | _ ->
                 let t1s = of_string t1 in
                 let t2s = of_string t2 in

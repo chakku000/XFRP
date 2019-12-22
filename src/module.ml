@@ -43,6 +43,8 @@ let construct_nodeinfo_table (ast : Syntax.ast)
                              (id_table : (string,int) Hashtbl.t)
                              : (int,node_t) Hashtbl.t = 
     let table = Hashtbl.create 128 in
+
+    (* Internal/Output Nodeをテーブルに追加 *)
     List.iter
         (function
             | Node ((name,t),_,_) ->
@@ -55,6 +57,17 @@ let construct_nodeinfo_table (ast : Syntax.ast)
                 let id = Hashtbl.find id_table name in
                 Hashtbl.add table id { name; t; number; })
         ast.definitions;
+
+    (* Input Nodeがまだテーブルに含まれていないので追加 *)
+    List.iter
+        (function
+            | Single (name,t) ->
+                let id = Hashtbl.find id_table name in
+                Hashtbl.add table id { name; t; number=1; }
+            | Array ((name,t),number) -> 
+                let id = Hashtbl.find id_table name in
+                Hashtbl.add table id { name; t; number; })
+        ast.in_nodes;
     table
 
 (* ASTから依存関係を抽出 *)

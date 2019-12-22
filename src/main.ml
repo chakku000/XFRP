@@ -42,7 +42,9 @@ let compile in_c : string =
         let lst2 = List.map (fun v -> string_of_int v) lst in
         "[" ^ (String.concat "," lst2) ^ "]"
     in
+
     Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array;
+
     (* C言語のコードを返す *)
     code
   with

@@ -27,6 +27,7 @@ rule read = parse
   | ']'               { RBRACKET }
   | '('               { LPAREN }
   | ')'               { RPAREN }
+  | "!="              { NEQ }
   | "=="              { EQUAL2 }
   | '='               { EQUAL }
   | '+'               { PLUS }

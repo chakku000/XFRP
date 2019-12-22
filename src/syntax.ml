@@ -48,6 +48,7 @@ type binop =
   | BDiv
   | BMod
   | BEq
+  | BNeq
   | BOr
   | BLte
   | BLt
@@ -55,28 +56,18 @@ type binop =
   | BRt
 
 let string_of_binop : binop -> string = function
-  | BAdd ->
-      "+"
-  | BMinus ->
-      "-"
-  | BMul ->
-      "*"
-  | BDiv ->
-      "/"
-  | BMod ->
-      "%"
-  | BEq ->
-      "=="
-  | BOr ->
-      "||"
-  | BLte ->
-      "<="
-  | BLt ->
-      "<"
-  | BRte ->
-      ">="
-  | BRt ->
-      ">"
+  | BAdd -> "+"
+  | BMinus -> "-"
+  | BMul -> "*"
+  | BDiv -> "/"
+  | BMod -> "%"
+  | BEq -> "=="
+  | BNeq -> "!="
+  | BOr -> "||"
+  | BLte -> "<="
+  | BLt -> "<"
+  | BRte -> ">="
+  | BRt -> ">"
 
 type uniop = UNeg
 

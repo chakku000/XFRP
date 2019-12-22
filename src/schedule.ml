@@ -112,4 +112,6 @@ let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) arr
 (* どのノードをどのCPUコアが更新するかを決定する *)
 let assign_to_cpu (ast : Syntax.ast) (program: Module.program) =
     let dist_array = collect_same_fsd ast program in
+    let max_distance = Array.length dist_array in
+    Printf.printf "max_distance = %d\n" max_distance;
     ()

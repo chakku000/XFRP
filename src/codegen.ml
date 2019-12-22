@@ -212,7 +212,6 @@ let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
       let res_var = get_unique_name () in (* res_var: if式の結果を保存する変数 *)
       let then_type = get_xfrp_expr_type then_expr program in
       let else_type = get_xfrp_expr_type else_expr program in
-      Printf.printf "%s <-> %s\n" (Type.of_string then_type) (Type.of_string else_type);
       let res_type = Type.union_type then_type else_type in
       (* res_varの型はthen_exprとelse_exprの型に一致する *)
       (* もしthen_exprとelse_exprの型が異なればコンパイルエラーにしてよい *)
