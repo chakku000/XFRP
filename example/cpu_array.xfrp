@@ -5,4 +5,4 @@ use
 
 node init[false] hoge@2048 : Bool = if 11 == inary[self/2] then true else false
 
-node oary@1024 : Int = if oary@last[self] then inary[self*2] else hoge[self]
+node oary@1024 : Int = if oary@last[self] != 0 then inary[self*2] else hoge[self]
