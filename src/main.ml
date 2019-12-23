@@ -12,12 +12,19 @@ let output_file = ref None
 
 let input_file = ref None
 
+(* Parallel *)
+let thread = ref 1
+
 (* Analyze command line argument *)
 let speclist =
   [ (* tuple of (key=string,spec,doc=string) *)
     ( "-o"
     , Arg.String (fun s -> output_file := Some s)
-    , "[file] Write Output file" ) ]
+    , "[file] Write Output file" );
+    (   "-thread",
+        Arg.Int (fun v -> thread := v),
+        "[thread] The parallel degree" )
+  ]
 
 let compile in_c : string =
   let lexbuf = from_channel in_c in
@@ -30,20 +37,20 @@ let compile in_c : string =
     let code : string = Codegen.code_of_ast ast program in
 
     (* 各ノードとIDの対応をテスト出力 *)
-    print_endline "-----> ID_TABLE";
+    (* print_endline "-----> ID_TABLE";
     Hashtbl.iter (fun name id -> Printf.printf "%s : %d\n" name id) program.id_table;
-    print_endline "ID_TABLE <-----";
+    print_endline "ID_TABLE <-----";*)
 
     (* 各FSDの値のノードのリスト *)
     let dist_array = Schedule.collect_same_fsd ast program in
+    Schedule.assign_to_cpu ast program !thread;
 
-    (* dist_arrayの出力 *)
-    let string_of_lst lst = 
+    (* test output : dist_arrayの出力 *)
+    (* let string_of_lst lst = 
         let lst2 = List.map (fun v -> string_of_int v) lst in
         "[" ^ (String.concat "," lst2) ^ "]"
     in
-
-    Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array;
+    Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array; *)
 
     (* C言語のコードを返す *)
     code
