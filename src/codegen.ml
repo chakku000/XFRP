@@ -385,14 +385,12 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
   Utils.concat_without_empty "\n" ["void setupt(){"; "\tturn=0;"; init_node; init_gnode; "}"] 
 
 (* loop関数を生成 *)
-let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : int) : string array = 
-  (* loop_codes.(i) := スレッドiが実行するloop関数 *)
-  let loop_codes : string array = Array.make thread "" in
-
+let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int* string array array = 
   (* scheduled : スケジューリングされたノード *)
   (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
   (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
   let scheduled : (int * ((Schedule.assign_node list) array)) array = Schedule.assign_to_cpu ast program thread in
+  let max_fsd = Array.length scheduled - 1 in
 
   (* update_x_y関数を生成*)
   (* update_x_y関数はスレッドxが担当するFSDがyのノード集合 *)
@@ -401,43 +399,41 @@ let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : i
     Array.map (fun (assign_of_each_fsd : (int * ((Schedule.assign_node list) array))) -> 
       let fsd, assign_fsd_array = assign_of_each_fsd in
       Array.mapi (fun th list_of_each_thread -> 
-        List.map (fun nodeinfo -> 
-          match nodeinfo with
-          | Schedule.Single (nodeid) ->
-              let info = Hashtbl.find program.info_table nodeid in
-              Printf.sprintf "update_%s();" info.name
-          | Schedule.Array (nodeid, (startindex, endindex))->
-              let info = Hashtbl.find program.info_table nodeid in
-              Printf.sprintf "for(int i=%d;i<%d;i++) update_%s(i);" startindex endindex info.name
-        ) list_of_each_thread
+        (* FSD=i, Thread=thが更新するノードの更新関数(update_<node名>)のリスト *)
+        let update_function_list = 
+          List.map (fun nodeinfo -> 
+            match nodeinfo with
+            | Schedule.Single (nodeid) ->
+                let info = Hashtbl.find program.info_table nodeid in
+                Printf.sprintf "\tupdate_%s();" info.name
+            | Schedule.Array (nodeid, (startindex, endindex))->
+                let info = Hashtbl.find program.info_table nodeid in
+                Printf.sprintf "\tfor(int i=%d;i<%d;i++) update_%s(i);" startindex endindex info.name
+          ) list_of_each_thread
+        in
+        (* 更新関数のリストを結合すればよい *)
+        let body = Utils.concat_without_empty "\n" update_function_list in
+        let head = 
+          Printf.sprintf "void update_%d_%d(){" th fsd in
+        head ^ "\n" ^ body ^ "\n}"
       ) assign_fsd_array
     ) scheduled
   in
 
   (* update_x_yのデバッグ出力 *)
-  Printf.printf "-----------\n";
-  Array.iteri (fun fsd a -> 
-    Printf.printf "----- fsd = %d ------\n" fsd;
-    Array.iteri (fun thread v -> 
-      Printf.printf "%d :" thread;
-      List.iter (fun nodename -> 
-        Printf.printf "%s, " nodename
-      ) v;
-      Printf.printf "\n"
-    ) a;
-  ) update_functions;
-  Printf.printf "-----------\n";
+  (* Printf.printf "-----------\n"; *)
+  (* Array.iteri (fun fsd a -> *) 
+  (*   Printf.printf "----- fsd = %d ------\n" fsd; *)
+  (*   Array.iteri (fun thread v -> *) 
+  (*     Printf.printf "%d :" thread; *)
+  (*       Printf.printf "%s, " v ; *)
+  (*     Printf.printf "\n" *)
+  (*   ) a; *)
+  (* ) update_functions; *)
+  (* Printf.printf "-----------\n"; *)
 
-  let max_fsd = Array.length scheduled in (* FSDの最大値 *)
-  let assign_matrix = Array.make_matrix max_fsd thread "" in
-
-
-  (* 関数の宣言("void loop?(){")を追加 *)
-  Array.mapi
-    (fun i code -> 
-      if i = 0 then Printf.sprintf "void loop(){%s\n}" code
-      else Printf.sprintf "void loop%d(){%s\n}" i code)
-  loop_codes
+  (* return *)
+  (max_fsd, update_functions)
 
 let main_code = "int main()\n{\n  setup();\n  loop();\n}"
 
@@ -477,8 +473,10 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
   in
   let main = main_code in
   let setup = setup_code ast prg in
-  let loop_array = create_loop_function ast prg thread in
-  let loop = Array.to_list loop_array |> Utils.concat_without_empty "\n" in
+  let maxfsd, update_function_array = create_loop_function ast prg thread in
+  let updates =
+    Array.map (fun a -> Array.to_list a |> String.concat "\n") update_function_array |> Array.to_list |> String.concat "\n" in
+  Printf.printf "MAX_FSD = %d\n" maxfsd;
   List.filter
     (fun s -> s != "")
     [ header
@@ -488,6 +486,6 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
     ; node_array_update
     ; gnode_update_kernel
     ; setup
-    ; loop
+    ; updates 
     ; main ]
   |> Utils.concat_without_empty "\n\n"

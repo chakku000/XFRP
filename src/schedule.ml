@@ -189,19 +189,19 @@ let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module
 let assign_to_cpu (ast : Syntax.ast) (program: Module.program) (thread : int) : (int * ((assign_node list) array)) array =
   let dist_array = collect_same_fsd ast program in (* dist_array[i] : FSDがiのノードの集合 *)
   (* let max_distance = Array.length dist_array -1 in *)
-  Array.iteri
-        (fun i lst ->
-          let assigned = schedule_fsd i lst thread program in
-          Array.iteri (* 出力 *)
-                (fun id lst ->
-                  Printf.printf "core%d : " id;
-                    List.iter (function
-                      | Single id -> Printf.printf "%d," id
-                        | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t)
-                    lst;
-                    Printf.printf "\n")
-                assigned)
-        dist_array;
+  (* Array.iteri *)
+  (*       (fun i lst -> *)
+  (*         let assigned = schedule_fsd i lst thread program in *)
+  (*         Array.iteri (1* 出力 *1) *)
+  (*               (fun id lst -> *)
+  (*                 Printf.printf "core%d : " id; *)
+  (*                   List.iter (function *)
+  (*                     | Single id -> Printf.printf "%d," id *)
+  (*                       | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t) *)
+  (*                   lst; *)
+  (*                   Printf.printf "\n" *)
+  (*               ) assigned) *)
+  (*       dist_array; *)
 
   (* (FSDの値, 各CPUコアが担当するノードのリストの配列)を返す *)
   Array.mapi
