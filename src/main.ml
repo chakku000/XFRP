@@ -34,7 +34,7 @@ let compile in_c : string =
     let program = Module.ast_to_program ast in
 
     (* C/C++のソースコード *)
-    let code : string = Codegen.code_of_ast ast program in
+    let code : string = Codegen.code_of_ast ast program !thread in
 
     (* 各ノードとIDの対応をテスト出力 *)
     (* print_endline "-----> ID_TABLE";
@@ -42,8 +42,7 @@ let compile in_c : string =
     print_endline "ID_TABLE <-----";*)
 
     (* 各FSDの値のノードのリスト *)
-    let dist_array = Schedule.collect_same_fsd ast program in
-    Schedule.assign_to_cpu ast program !thread;
+    (* let dist_array = Schedule.collect_same_fsd ast program in *)
 
     (* test output : dist_arrayの出力 *)
     (* let string_of_lst lst = 

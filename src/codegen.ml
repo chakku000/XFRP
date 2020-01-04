@@ -362,30 +362,86 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
   let init_node =
     List.filter_map
       (function
-        | Node ((i, t), init, _) ->
-            if Option.is_none init then None
-              (* 初期化指定子が無い場合 *)
-            else
-              let preast, curast = expr_to_clang (Option.get init) prg in
-              let precode = code_of_c_ast preast 1 in
-              let curcode = code_of_c_ast curast 1 in
-              Some
-                ( precode
-                ^ (if precode = "" then "" else "\n")
-                ^ "\t" ^ i ^ "[1] = " ^ curcode )
-        | _ ->
-            None)
+        | Node ((i, t), Some(init), _)  ->
+            let preast, curast = expr_to_clang init prg in
+            let precode = code_of_c_ast preast 1 in
+            let curcode = code_of_c_ast curast 1 in
+            Some
+              ( precode
+              ^ (if precode = "" then "" else "\n")
+              ^ "\t" ^ i ^ "[1] = " ^ curcode )
+        | NodeA((i,t),num, Some(init), _) -> 
+            let pre_ast, cur_ast = expr_to_clang init prg in
+            let pre_code = code_of_c_ast pre_ast 1 in
+            let cur_code = code_of_c_ast cur_ast 1 in
+            let assign_code = Printf.sprintf "\t\t%s[self] = %s;" i cur_code in
+            let code = Utils.concat_without_empty "\n" [pre_code; assign_code] in
+            let for_stub = Printf.sprintf "\tfor(int self=0;self<%d;self++){\n%s\n\t}" num code in
+            Some(for_stub)
+        | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n"
   in
-  "void setup(){\n" ^ "\tturn=0;\n" ^ init_node
-  ^ (if init_node = "" then "" else "\n")
-  ^ init_gnode ^ "\n" ^ "}"
+  Utils.concat_without_empty "\n" ["void setupt(){"; "\tturn=0;"; init_node; init_gnode; "}"] 
+
+(* loop関数を生成 *)
+let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : int) : string array = 
+  (* loop_codes.(i) := スレッドiが実行するloop関数 *)
+  let loop_codes : string array = Array.make thread "" in
+
+  (* scheduled : スケジューリングされたノード *)
+  (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
+  (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
+  let scheduled : (int * ((Schedule.assign_node list) array)) array = Schedule.assign_to_cpu ast program thread in
+
+  (* update_x_y関数を生成*)
+  (* update_x_y関数はスレッドxが担当するFSDがyのノード集合 *)
+  (* update_functions.(i).(j)にはスレッドjが担当するFSDがiのノードを更新する関数がリストになっている *)
+  let update_functions = 
+    Array.map (fun (assign_of_each_fsd : (int * ((Schedule.assign_node list) array))) -> 
+      let fsd, assign_fsd_array = assign_of_each_fsd in
+      Array.mapi (fun th list_of_each_thread -> 
+        List.map (fun nodeinfo -> 
+          match nodeinfo with
+          | Schedule.Single (nodeid) ->
+              let info = Hashtbl.find program.info_table nodeid in
+              Printf.sprintf "update_%s();" info.name
+          | Schedule.Array (nodeid, (startindex, endindex))->
+              let info = Hashtbl.find program.info_table nodeid in
+              Printf.sprintf "for(int i=%d;i<%d;i++) update_%s(i);" startindex endindex info.name
+        ) list_of_each_thread
+      ) assign_fsd_array
+    ) scheduled
+  in
+
+  (* update_x_yのデバッグ出力 *)
+  Printf.printf "-----------\n";
+  Array.iteri (fun fsd a -> 
+    Printf.printf "----- fsd = %d ------\n" fsd;
+    Array.iteri (fun thread v -> 
+      Printf.printf "%d :" thread;
+      List.iter (fun nodename -> 
+        Printf.printf "%s, " nodename
+      ) v;
+      Printf.printf "\n"
+    ) a;
+  ) update_functions;
+  Printf.printf "-----------\n";
+
+  let max_fsd = Array.length scheduled in (* FSDの最大値 *)
+  let assign_matrix = Array.make_matrix max_fsd thread "" in
+
+
+  (* 関数の宣言("void loop?(){")を追加 *)
+  Array.mapi
+    (fun i code -> 
+      if i = 0 then Printf.sprintf "void loop(){%s\n}" code
+      else Printf.sprintf "void loop%d(){%s\n}" i code)
+  loop_codes
 
 let main_code = "int main()\n{\n  setup();\n  loop();\n}"
 
-let code_of_ast : Syntax.ast -> Module.program -> string =
- fun ast prg ->
+let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
   let header = header_code () in
   let macros = macro_code () in
   let variables = global_variable ast prg in
@@ -421,6 +477,8 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
   in
   let main = main_code in
   let setup = setup_code ast prg in
+  let loop_array = create_loop_function ast prg thread in
+  let loop = Array.to_list loop_array |> Utils.concat_without_empty "\n" in
   List.filter
     (fun s -> s != "")
     [ header
@@ -430,5 +488,6 @@ let code_of_ast : Syntax.ast -> Module.program -> string =
     ; node_array_update
     ; gnode_update_kernel
     ; setup
+    ; loop
     ; main ]
   |> Utils.concat_without_empty "\n\n"

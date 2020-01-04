@@ -7,7 +7,7 @@ module IntSet = Set.Make (Int)
 (* ノード配列ならばArrayで区間も保存する *)
 type assign_node =
     | Single of int 
-    | Array of int * (int * int)
+    | Array of int * (int * int) (* ノードID * (開始インデックス * 修了インデックス) *)
 
 (* 依存グラフの構築 *)
 (* 返り値はノードのIDを使った隣接リスト  *)
@@ -107,6 +107,7 @@ let calc_fsd (ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t =
     fsd
 
 (* 各距離のノードを集約する関数 *)
+(* 返り値retにたいしてret[d]でFSDがdのノードの集合 *)
 let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) array = 
     let fsd_table = calc_fsd ast prog in
     let max_dist = Hashtbl.fold (fun _ v acc -> max v acc) fsd_table 0 in
@@ -118,25 +119,26 @@ let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) arr
         fsd_table;
     dist_array
 
-(* 各FSDの値でスケジューリングする *)
-(* 引数のnodesはノードのidリスト. IDリストなのでprogram.info_tableから直接検索できる *)
-let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module.program) = 
-    let node_sum = 
-        List.fold_left
-            (fun acc node ->
-                let nodeinfo = Hashtbl.find program.info_table node in
-                acc + nodeinfo.number)
-            0
-            nodes 
-    in
-    let singles = List.filter (* ノード配列でないノードのIDリスト *)
-        (fun node ->
-            let info = Hashtbl.find program.info_table node in
-            info.number = 1) nodes in
-    let arrays = List.filter (* ノード配列のIDリスト *)
-        (fun node ->
-            let info = Hashtbl.find program.info_table node in
-            info.number > 1) nodes in
+(*各FSDの値でスケジューリングする 
+  引数のnodesはノードのidリスト. IDリストなのでprogram.info_tableから直接検索できる
+  返り値retに対してret[th]がスレッドthの担当するノードのリスト *)
+let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module.program) : (assign_node list) array = 
+  (* let node_sum = *) 
+  (*   List.fold_left *)
+  (*     (fun acc node -> *)
+  (*       let nodeinfo = Hashtbl.find program.info_table node in *)
+  (*       acc + nodeinfo.number) *)
+  (*     0 *)
+  (*     nodes *) 
+  (*   in *)
+  let singles = List.filter (* ノード配列でないノードのIDリスト *)
+    (fun node ->
+      let info = Hashtbl.find program.info_table node in
+      info.number = 1) nodes in
+  let arrays = List.filter (* ノード配列のIDリスト *)
+    (fun node ->
+      let info = Hashtbl.find program.info_table node in
+      info.number > 1) nodes in
 
     (* 各coreの更新するノード群 *)
     let cores = Array.make thread [] in
@@ -184,20 +186,28 @@ let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module
 
 
 (* どのノードをどのCPUコアが更新するかを決定する *)
-let assign_to_cpu (ast : Syntax.ast) (program: Module.program) (thread : int) =
-    let dist_array = collect_same_fsd ast program in
-    let max_distance = Array.length dist_array -1 in
-    Array.iteri
+let assign_to_cpu (ast : Syntax.ast) (program: Module.program) (thread : int) : (int * ((assign_node list) array)) array =
+  let dist_array = collect_same_fsd ast program in (* dist_array[i] : FSDがiのノードの集合 *)
+  (* let max_distance = Array.length dist_array -1 in *)
+  Array.iteri
         (fun i lst ->
-            let assigned = schedule_fsd i lst thread program in
-            Array.iteri
+          let assigned = schedule_fsd i lst thread program in
+          Array.iteri (* 出力 *)
                 (fun id lst ->
-                    Printf.printf "core%d : " id;
+                  Printf.printf "core%d : " id;
                     List.iter (function
-                        | Single id -> Printf.printf "%d," id
+                      | Single id -> Printf.printf "%d," id
                         | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t)
                     lst;
                     Printf.printf "\n")
                 assigned)
         dist_array;
-    ()
+
+  (* (FSDの値, 各CPUコアが担当するノードのリストの配列)を返す *)
+  Array.mapi
+    (fun i (* fsd *) node_list (* fsdに相当するノードのリスト *) ->
+      (* assigned[th]: スレッドthがFSD=iで担当するノードの配列*)
+      let assigned : (assign_node list) array = schedule_fsd i node_list thread program in
+      (* (FSD,各コアのFSD(i)で担当するノードのリスト)のtuple*)
+      (i, assigned)
+    ) dist_array
