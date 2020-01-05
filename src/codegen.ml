@@ -385,13 +385,15 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
   Utils.concat_without_empty "\n" ["void setupt(){"; "\tturn=0;"; init_node; init_gnode; "}"] 
 
 (* loop関数を生成 *)
-let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int* string array array = 
+(* 返り値 (max_fsd, assign_array2d) 
+ *  max_fsd : FSDの最大値
+ *  assign_array2d : FSDがiのときにスレッドjが更新する更新関数 *)
+let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int* string array array = 
   (* scheduled : スケジューリングされたノード *)
   (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
   (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
   let scheduled : (int * ((Schedule.assign_node list) array)) array = Schedule.assign_to_cpu ast program thread in
   let max_fsd = Array.length scheduled - 1 in
-
   (* update_x_y関数を生成*)
   (* update_x_y関数はスレッドxが担当するFSDがyのノード集合 *)
   (* update_functions.(i).(j)にはスレッドjが担当するFSDがiのノードを更新する関数がリストになっている *)
@@ -419,8 +421,7 @@ let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : i
       ) assign_fsd_array
     ) scheduled
   in
-
-  (* update_x_yのデバッグ出力 *)
+  (* update_x_yのデバッグ出力 *)(*{{{*)
   (* Printf.printf "-----------\n"; *)
   (* Array.iteri (fun fsd a -> *) 
   (*   Printf.printf "----- fsd = %d ------\n" fsd; *)
@@ -430,10 +431,29 @@ let create_loop_function (ast : Syntax.ast) (program:Module.program) (thread : i
   (*     Printf.printf "\n" *)
   (*   ) a; *)
   (* ) update_functions; *)
-  (* Printf.printf "-----------\n"; *)
-
+  (* Printf.printf "-----------\n"; *)(*}}}*)
   (* return *)
   (max_fsd, update_functions)
+
+let create_loop_function (ast : Syntax.ast) (program : Module.program)
+                          (thread : int) (max_fsd : int) 
+                        : string array =
+  (* 返り値 *)
+  (* loop_function.(i)にはスレッドiが実行するloop関数 *)
+  let loop_functions = Array.make thread "" in
+  (* 各loop関数を実装 *)
+  for i = 0 to thread-1 do
+    let head =
+      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n\tsynchronization(%d);\n" i) in
+    let body = 
+      List.init max_fsd (fun i -> max_fsd - i) |> 
+      List.map (fun fsd -> Printf.sprintf "\tupdate_%d_%d();" i fsd) |>
+      String.concat (Printf.sprintf "\n\tsynchronization(%d);\n" i)
+    in
+    let tail = Printf.sprintf "\n\tsynchronization(%d);\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
+    loop_functions.(i) <- head ^ body ^ tail
+  done;
+  loop_functions
 
 let main_code = "int main()\n{\n  setup();\n  loop();\n}"
 
@@ -473,10 +493,11 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
   in
   let main = main_code in
   let setup = setup_code ast prg in
-  let maxfsd, update_function_array = create_loop_function ast prg thread in
+  let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread in
   let updates =
     Array.map (fun a -> Array.to_list a |> String.concat "\n") update_function_array |> Array.to_list |> String.concat "\n" in
-  Printf.printf "MAX_FSD = %d\n" maxfsd;
+  let loops = create_loop_function ast prg thread maxfsd |> Array.to_list |> Utils.concat_without_empty "\n"
+  in
   List.filter
     (fun s -> s != "")
     [ header
@@ -487,5 +508,6 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
     ; gnode_update_kernel
     ; setup
     ; updates 
+    ; loops
     ; main ]
   |> Utils.concat_without_empty "\n\n"
