@@ -51,6 +51,9 @@ let compile in_c : string =
     in
     Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array; *)
 
+    (* ユーザー設定の部分を含むコードを出力する *)
+    User_setting.generate_user_setting_file !thread ast program;
+
     (* C言語のコードを返す *)
     code
   with

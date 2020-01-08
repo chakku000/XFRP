@@ -73,15 +73,20 @@ let rec string_of_c_ast (ast : c_ast) : string =
       List.map string_of_c_ast codes |> String.concat " :: "
 
 let header_list = ["stdio.h"; "stdlib.h"]
+let header_list2 = ["setting.h"]
 
 let header_code () =
   List.map (fun s -> "#include<" ^ s ^ ">") header_list |> String.concat "\n"
+
+let header_code2 () =
+  List.map (fun s -> Printf.sprintf "#include \"%s\"" s) header_list2 |> Utils.concat_without_empty "\n"
 
 let macros = ["#define bool char"; "#define true 1"; "#define false 0"]
 
 let macro_code () = Utils.concat_without_empty "\n" macros
 
-let global_variable (ast : Syntax.ast) (prg : Module.program) =
+(* ノードの値を保存するグローバルな変数を定義 *)
+let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
   let turn_vairable = "char turn = 0;" in
   let cpunode_to_variable = function
     | Single (i, t) ->
@@ -115,10 +120,10 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =
     |> String.concat "\n"
   in
   List.filter String.is_not_empty [turn_vairable; input; node; gnode]
-  |> String.concat "\n"
+  |> String.concat "\n"(*}}}*)
 
 (* XFRPの式の型を取得する関数 *)
-let rec get_xfrp_expr_type (e : expr) (program : Module.program) : Type.t = 
+let rec get_xfrp_expr_type (e : expr) (program : Module.program) : Type.t = (*{{{*)
     match e with
     | ESelf -> Type.TInt
     | EConst value -> type_of_const value
@@ -161,12 +166,10 @@ let rec get_xfrp_expr_type (e : expr) (program : Module.program) : Type.t =
         let t1 = get_xfrp_expr_type e1 program in
         let t2 = get_xfrp_expr_type e2 program in
         if t1 == t2 then t1
-                    else raise (TypeError ("In If-expr, the value of then and else are not matched"))
+                    else raise (TypeError ("In If-expr, the value of then and else are not matched"))(*}}}*)
 
-
-        
 (* XFRPの式 -> C言語のAST *)
-let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
+let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =(*{{{*)
   match e with
   | ESelf ->
       (Empty, Variable "self")
@@ -221,9 +224,10 @@ let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =
           , expr_to_clang then_expr program
           , expr_to_clang else_expr program )
       , Variable res_var )
+(*}}}*)
 
 (* C言語のASTからC言語のコード *)
-let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
+let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
   let tab = String.make tabs '\t' in
   match ast with
   | Empty ->
@@ -300,31 +304,28 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =
         (function Empty -> None | ast -> Some (code_of_c_ast ast tabs))
         lst
       |> String.concat "\n"
+(*}}}*)
 
 (* ノード更新関数を生やす関数 *)
-let generate_node_update_function (name : string) (expr : Syntax.expr) (program:Module.program) =
-  let declare = Printf.sprintf "void %s_update(){\n" name in
+let generate_node_update_function (name : string) (expr : Syntax.expr) (program:Module.program) =(*{{{*)
+  let declare = Printf.sprintf "void %s_update(){" name in
   let foward, backward = expr_to_clang expr program in
   let code1 = code_of_c_ast foward 1 in
   let code2 = code_of_c_ast backward 0 in
-  String.concat ""
-    [ declare
-    ; (code1 ^ if code1 = "" then "" else "\n")
-    ; Printf.sprintf "\t%s[turn] = %s ;" name code2
-    ; "\n}" ]
+  Utils.concat_without_empty "\n" [declare; code1; Printf.sprintf "\t%s[turn] = %s ;" name code2; "}"](*}}}*)
 
 (* ノード配列の更新関数を生成する関数 *)
-let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) =
+let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) =(*{{{*)
   let declare = Printf.sprintf "void %s_update(int self){" name in
   let pre, post = expr_to_clang expr program in
   let code_pre = code_of_c_ast pre 1 in
   let code_post =
     Printf.sprintf "\t%s[turn][self] = %s;" name (code_of_c_ast post 1)
   in
-  Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"]
+  Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
-let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
+let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
   (* GNodeの初期化 *)
   let init_gnode =
     List.filter_map
@@ -374,7 +375,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
             let pre_ast, cur_ast = expr_to_clang init prg in
             let pre_code = code_of_c_ast pre_ast 1 in
             let cur_code = code_of_c_ast cur_ast 1 in
-            let assign_code = Printf.sprintf "\t\t%s[self] = %s;" i cur_code in
+            let assign_code = Printf.sprintf "\t\t%s[1][self] = %s;" i cur_code in
             let code = Utils.concat_without_empty "\n" [pre_code; assign_code] in
             let for_stub = Printf.sprintf "\tfor(int self=0;self<%d;self++){\n%s\n\t}" num code in
             Some(for_stub)
@@ -382,7 +383,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =
       ast.definitions
     |> Utils.concat_without_empty "\n"
   in
-  Utils.concat_without_empty "\n" ["void setupt(){"; "\tturn=0;"; init_node; init_gnode; "}"] 
+  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; "}"] (*}}}*)
 
 (* loop関数を生成 *)
 (* 返り値 (max_fsd, assign_array2d) 
@@ -407,10 +408,10 @@ let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (t
             match nodeinfo with
             | Schedule.Single (nodeid) ->
                 let info = Hashtbl.find program.info_table nodeid in
-                Printf.sprintf "\tupdate_%s();" info.name
+                Printf.sprintf "\t%s_update();" info.name
             | Schedule.Array (nodeid, (startindex, endindex))->
                 let info = Hashtbl.find program.info_table nodeid in
-                Printf.sprintf "\tfor(int i=%d;i<%d;i++) update_%s(i);" startindex endindex info.name
+                Printf.sprintf "\tfor(int i=%d;i<%d;i++) %s_update(i);" startindex endindex info.name
           ) list_of_each_thread
         in
         (* 更新関数のリストを結合すればよい *)
@@ -459,29 +460,26 @@ let main_code = "int main()\n{\n  setup();\n  loop();\n}"
 
 let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
   let header = header_code () in
+  let header2 = header_code2 () in
   let macros = macro_code () in
   let variables = global_variable ast prg in
-  let node_update =
+  let node_update = (* Internal/Outputノードの更新関数を定義 *)
     List.filter_map
       (function
-        | Node ((i, t), _, e) ->
-            Some (generate_node_update_function i e prg)
-        | _ ->
-            None)
+        | Node ((i, t), _, e) -> Some (generate_node_update_function i e prg)
+        | _ -> None)
       ast.definitions
     |> String.concat "\n\n"
   in
-  let node_array_update =
+  let node_array_update = (* Internal/Output配列ノードの更新関数を定義 *)
     List.filter_map
       (function
-        | NodeA ((i, t), _, _, e) ->
-            Some (generate_nodearray_update i e prg)
-        | _ ->
-            None)
+        | NodeA ((i, t), _, _, e) -> Some (generate_nodearray_update i e prg)
+        | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n\n"
   in
-  let gnode_update_kernel =
+  let gnode_update_kernel = (* GPUノードの更新関数を定義 *)
     List.filter_map
       (function
         | GNode ((i, t), _, _, e) ->
@@ -491,6 +489,13 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
       ast.definitions
     |> String.concat "\n\n"
   in
+  let input_node_update_functions =
+    List.map
+      (function
+        | Single (i,_) -> Printf.sprintf "void %s_update(){\n\t%s[turn]=definition_of_%s();\n}" i i i
+        | Array ((i,t),num) -> Printf.sprintf "void %s_update(int self){\n\t%s[turn][self] = definition_of_%s(self);\n}" i i i)
+      ast.in_nodes
+        |> String.concat "\n\n" in
   let main = main_code in
   let setup = setup_code ast prg in
   let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread in
@@ -501,8 +506,10 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
   List.filter
     (fun s -> s != "")
     [ header
+    ; header2
     ; macros
     ; variables
+    ; input_node_update_functions
     ; node_update
     ; node_array_update
     ; gnode_update_kernel
