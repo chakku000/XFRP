@@ -12,37 +12,49 @@ let output_file = ref None
 
 let input_file = ref None
 
+(* Parallel *)
+let thread = ref 1
+
 (* Analyze command line argument *)
 let speclist =
   [ (* tuple of (key=string,spec,doc=string) *)
     ( "-o"
     , Arg.String (fun s -> output_file := Some s)
-    , "[file] Write Output file" ) ]
+    , "[file] Write Output file" );
+    (   "-thread",
+        Arg.Int (fun v -> thread := v),
+        "[thread] The parallel degree" )
+  ]
 
 let compile in_c : string =
   let lexbuf = from_channel in_c in
   try
     let ast : Syntax.ast = Parser.top Lexer.read lexbuf in
-    (* let p = "Module_ID = " ^ ast.module_id ^ "\n" ^ "Input Node = [" *)
-    (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.in_nodes) *)
-    (* ^ "]\n" ^ "Output Node = [" *)
-    (* ^ String.concat "," (List.map (fun (i, t) -> i) ast.out_nodes) *)
-    (* ^ "]\n" ^ "USE = [" ^ String.concat "," ast.use ^ "]\n" *)
-    (* ^ String.concat "," (List.map Syntax.string_of_definition ast.definitions) in *)
-    (* print_endline p; *)
-    let program = Module.ast_to_program ast in
     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
-    let code : string = Codegen.code_of_ast ast program in
+    let program = Module.ast_to_program ast in
+
     (* C/C++のソースコード *)
-    (* Module.print_program program; (1* astから取り出したデータを出力 *1) *)
-    let graph = program.graph in
-    Hashtbl.iter
-      (fun k v ->
-        print_int k ;
-        print_string "->" ;
-        Module.print_intset v ;
-        print_newline ())
-      graph ;
+    let code : string = Codegen.code_of_ast ast program !thread in
+
+    (* 各ノードとIDの対応をテスト出力 *)
+    (* print_endline "-----> ID_TABLE";
+    Hashtbl.iter (fun name id -> Printf.printf "%s : %d\n" name id) program.id_table;
+    print_endline "ID_TABLE <-----";*)
+
+    (* 各FSDの値のノードのリスト *)
+    (* let dist_array = Schedule.collect_same_fsd ast program in *)
+
+    (* test output : dist_arrayの出力 *)
+    (* let string_of_lst lst = 
+        let lst2 = List.map (fun v -> string_of_int v) lst in
+        "[" ^ (String.concat "," lst2) ^ "]"
+    in
+    Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array; *)
+
+    (* ユーザー設定の部分を含むコードを出力する *)
+    User_setting.generate_user_setting_file !thread ast program;
+
+    (* C言語のコードを返す *)
     code
   with
   | Lexer.Error msg ->
@@ -66,7 +78,7 @@ let main () =
             raise (CommandError "Input file is not specified.") )
     in
     let c_code = compile input in
-    print_endline "======================================" ;
+    (* print_endline "======================================" ; *)
     print_endline c_code
   with CommandError msg -> Printf.eprintf "Command Error: %s" msg
 

@@ -27,6 +27,7 @@ rule read = parse
   | ']'               { RBRACKET }
   | '('               { LPAREN }
   | ')'               { RPAREN }
+  | "!="              { NEQ }
   | "=="              { EQUAL2 }
   | '='               { EQUAL }
   | '+'               { PLUS }
@@ -34,6 +35,10 @@ rule read = parse
   | '%'               { PERCENT }
   | '*'               { ASTERISK }
   | '/'               { SLASH }
+  | ">="              { RTE }
+  | "<="              { LTE }
+  | '>'               { RT }
+  | '<'               { LT }
   | '@'               { AT }
   | "module"          { MODULE }
   | "in"              { IN }

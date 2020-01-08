@@ -18,18 +18,7 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
     (ast : Syntax.ast) (program : Module.program) : string =
   let modification = "__global__" in
   let kernel_name = Printf.sprintf "%s_kernel" name in
-  let id_to_type_table =
-    (* Nodeから型への辞書 TODO これを毎回構築してるの効率が悪い *)
-    let tbl = Hashtbl.create 10 in
-    List.iter
-      (function Node ((i, t), _, _) -> Hashtbl.add tbl i t | _ -> ())
-      ast.definitions ;
-    List.iter (function i, t -> Hashtbl.add tbl i t) ast.in_nodes ;
-    List.iter
-      (function GNode ((i, t), _, _, _) -> Hashtbl.add tbl i t | _ -> ())
-      ast.definitions ;
-    tbl
-  in
+  let id_to_type_table = Utils.create_id_type_dict ast in
   let rec collect_node_deps e =
     match e with
     | GSelf ->
