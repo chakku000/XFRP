@@ -55,7 +55,8 @@ let construct_nodeinfo_table (ast : Syntax.ast)
                 Hashtbl.add table id { name; t; number; }
             | GNode ((name,t), number, _, _) -> 
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number; })
+                Hashtbl.add table id { name; t; number; }
+            | Func _ -> ())
         ast.definitions;
 
     (* Input Nodeがまだテーブルに含まれていないので追加 *)
@@ -84,7 +85,7 @@ let ast_to_program : Syntax.ast -> program =
               Some i
           | NodeA ((i, _), _, _, _) ->
               Some i
-          | GNode _ ->
+          | _ ->
               None)
         ast.definitions
     in

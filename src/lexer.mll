@@ -54,7 +54,7 @@ rule read = parse
   | "else"            { ELSE }
   | "last"            { LAST }
   | "self"            { SELF }
-  (* | "fun"             { FUNCTION } *)
+  | "func"            { FUNC }
   | id                { ID (Lexing.lexeme lexbuf) }
   | fdigits           { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
   | digits            { INT (int_of_string (Lexing.lexeme lexbuf)) }

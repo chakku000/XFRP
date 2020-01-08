@@ -1,0 +1,16 @@
+module FanController    # module name
+in  tmp: Float,         # temperature sensor
+    hmd: Float          # humidity sensor
+out fan: Bool           # fan switch
+use
+
+func calc_di (tmp:Float, hmd:Float) : Float = 0.81*tmp+0.01*hmd*(0.99*tmp-14.3)+46.3
+
+# discomfort index
+node di:Float = calc_di(tmp,hmd)
+
+# fun status
+node init[false] fan:Bool = di >= ho
+
+# threshold
+node ho:Float = 75.0 + if fan@last then -0.5 else 0.5

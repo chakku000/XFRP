@@ -2,6 +2,7 @@ open Syntax
 open Type
 
 exception TypeError of string
+exception Unreachable of string
 
 module String = struct
   include String
@@ -38,7 +39,8 @@ let get_unique_name () : string =
   unique_index := !unique_index + 1 ;
   "tmp_" ^ id
 
-let rec string_of_c_ast (ast : c_ast) : string =
+(* C言語のASTのpretty printer *)
+let rec string_of_c_ast (ast : c_ast) : string =(*{{{*)
   match ast with
   | Empty ->
       "Empty"
@@ -70,7 +72,7 @@ let rec string_of_c_ast (ast : c_ast) : string =
         (string_of_c_ast cond_pre)
         (string_of_c_ast cond_post)
   | CodeList codes ->
-      List.map string_of_c_ast codes |> String.concat " :: "
+      List.map string_of_c_ast codes |> String.concat " :: "(*}}}*)
 
 let header_list = ["stdio.h"; "stdlib.h"]
 let header_list2 = ["setting.h"]
@@ -226,6 +228,61 @@ let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =(*{
       , Variable res_var )
 (*}}}*)
 
+(* XFRPの式 -> C言語のAST. 関数のbodyの生成に使う *)
+let rec expr_to_clang_of_func (e : expr) (program : Module.program) : c_ast * c_ast =(*{{{*)
+  match e with
+  | ESelf ->
+      (Empty, Variable "self")
+  | EConst e ->
+      (Empty, Const (Syntax.string_of_const e))
+  | Eid i ->
+      (Empty, Variable(i))
+  | EidA (i, e) -> (* e:添字 *)
+      raise (Unreachable "In function EidA is not used")
+  | EAnnot (id, annot) ->
+      raise (Unreachable "In function EAnnot is not used")
+  | EAnnotA (i, _, indexe) ->
+      raise (Unreachable "In function EAnnotA is not used")
+  | Ebin (op, e1, e2) ->
+      let op_symbol = string_of_binop op in
+      let pre1, cur1 = expr_to_clang_of_func e1 program in
+      let pre2, cur2 = expr_to_clang_of_func e2 program in
+      let pre =
+        match (pre1, pre2) with
+        | Empty, Empty ->
+            Empty
+        | pre1, Empty ->
+            pre1
+        | Empty, pre2 ->
+            pre2
+        | pre1, pre2 ->
+            CodeList [pre1; pre2]
+      in
+      (pre, Binop (op_symbol, cur1, cur2))
+  | EUni (uni, e) ->
+      let opsym = string_of_uniop uni in
+      let pre, post = expr_to_clang_of_func e program in
+      (pre, Uniop (opsym, post))
+  | EApp (f, args) ->
+      let maped = List.map (fun v -> expr_to_clang_of_func v program) args in
+      let pre : c_ast list = List.map (fun (p, _) -> p) maped in
+      let a : c_ast list = List.map (fun (_, a) -> a) maped in
+      (CodeList pre, Call (f, a))
+  | Eif (cond_expr, then_expr, else_expr) ->
+      let res_var = get_unique_name () in (* res_var: if式の結果を保存する変数 *)
+      let then_type = get_xfrp_expr_type then_expr program in
+      let else_type = get_xfrp_expr_type else_expr program in
+      let res_type = Type.union_type then_type else_type in
+      (* res_varの型はthen_exprとelse_exprの型に一致する *)
+      (* もしthen_exprとelse_exprの型が異なればコンパイルエラーにしてよい *)
+      ( If
+          ( ( res_type, res_var )
+          , expr_to_clang_of_func cond_expr program
+          , expr_to_clang_of_func then_expr program
+          , expr_to_clang_of_func else_expr program )
+      , Variable res_var )
+(*}}}*)
+
 (* C言語のASTからC言語のコード *)
 let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
   let tab = String.make tabs '\t' in
@@ -306,13 +363,25 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
       |> String.concat "\n"
 (*}}}*)
 
+(* 関数定義を生成する関数 *)
+let generate_functions (funcname : string) (typ : Type.t) (args : id_and_type list) (expr : Syntax.expr) (program : Module.program) = 
+  let args_code = 
+    List.map (fun (i,t) -> (Type.of_string t) ^ " " ^ i) args
+    |> String.concat ", "
+  in
+  let declare = Printf.sprintf "%s %s(%s){" (Type.of_string typ) funcname args_code in
+  let foward, backward = expr_to_clang_of_func expr program in
+  let code1 = code_of_c_ast foward 1 in
+  let code2 = code_of_c_ast backward 0 in
+  Utils.concat_without_empty "\n" [declare; code1; "\treturn " ^ code2 ^ ";"; "}"]
+
 (* ノード更新関数を生やす関数 *)
-let generate_node_update_function (name : string) (expr : Syntax.expr) (program:Module.program) =(*{{{*)
+let generate_node_update_function (name : string) (expr : Syntax.expr) (program:Module.program) =
   let declare = Printf.sprintf "void %s_update(){" name in
   let foward, backward = expr_to_clang expr program in
   let code1 = code_of_c_ast foward 1 in
   let code2 = code_of_c_ast backward 0 in
-  Utils.concat_without_empty "\n" [declare; code1; Printf.sprintf "\t%s[turn] = %s ;" name code2; "}"](*}}}*)
+  Utils.concat_without_empty "\n" [declare; code1; Printf.sprintf "\t%s[turn] = %s ;" name code2; "}"]
 
 (* ノード配列の更新関数を生成する関数 *)
 let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) =(*{{{*)
@@ -367,10 +436,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
             let preast, curast = expr_to_clang init prg in
             let precode = code_of_c_ast preast 1 in
             let curcode = code_of_c_ast curast 1 in
-            Some
-              ( precode
-              ^ (if precode = "" then "" else "\n")
-              ^ "\t" ^ i ^ "[1] = " ^ curcode )
+            Some (Utils.concat_without_empty "\n" [precode; "\t"^i^"[1]="^curcode^";"])
         | NodeA((i,t),num, Some(init), _) -> 
             let pre_ast, cur_ast = expr_to_clang init prg in
             let pre_code = code_of_c_ast pre_ast 1 in
@@ -436,7 +502,8 @@ let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (t
   (* return *)
   (max_fsd, update_functions)
 
-let create_loop_function (ast : Syntax.ast) (program : Module.program)
+(* loop,loop1,...関数を生成する *)
+let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
                           (thread : int) (max_fsd : int) 
                         : string array =
   (* 返り値 *)
@@ -454,15 +521,25 @@ let create_loop_function (ast : Syntax.ast) (program : Module.program)
     let tail = Printf.sprintf "\n\tsynchronization(%d);\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
     loop_functions.(i) <- head ^ body ^ tail
   done;
-  loop_functions
+  loop_functions(*}}}*)
 
 let main_code = "int main()\n{\n  setup();\n  loop();\n}"
 
-let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
+(* 全体のC言語のコードを文字列として出力する *)
+(* 外部からはこの関数を呼べばいい *)
+let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{{{*)
   let header = header_code () in
   let header2 = header_code2 () in
   let macros = macro_code () in
   let variables = global_variable ast prg in
+  let functions = (* 関数定義 *)
+    List.filter_map
+      (function
+        | Func ((i,t),args,e) -> Some (generate_functions i t args e prg)
+        | _ -> None
+      ) ast.definitions
+        |> String.concat "\n\n"
+  in
   let node_update = (* Internal/Outputノードの更新関数を定義 *)
     List.filter_map
       (function
@@ -509,6 +586,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
     ; header2
     ; macros
     ; variables
+    ; functions
     ; input_node_update_functions
     ; node_update
     ; node_array_update
@@ -517,4 +595,4 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =
     ; updates 
     ; loops
     ; main ]
-  |> Utils.concat_without_empty "\n\n"
+  |> Utils.concat_without_empty "\n\n"(*}}}*)

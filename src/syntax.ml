@@ -150,6 +150,7 @@ type definition =
   | Node of id_and_type * expr option (* init *) * expr
   | NodeA of id_and_type * int * expr option * expr
   | GNode of id_and_type * int * expr option (* init *) * gexpr
+  | Func of id_and_type * (id_and_type list) * expr
 
 (* | Fun  of (id * Type.t * id list * Type.t list) * expr *)
 (* | Const of id_and_type * expr *)
@@ -167,8 +168,10 @@ let string_of_definition = function
   | GNode (it, n, None, e) ->
       "GNode {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = " ^ "NONE"
       ^ "\n\texpr = " ^ string_of_gexpr e ^ "\n}"
-  | _ ->
+  | NodeA _ ->
       "NodeA is notimplmented"
+  | Func _ -> 
+      "Func is not implemented"
 
 type ast =
   { module_id: moduleid

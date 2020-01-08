@@ -5,7 +5,7 @@
 %}
 
 (* 予約後 *)
-%token MODULE IN OUT USE INIT NODE GNODE TRUE FALSE IF THEN ELSE AT LAST SELF
+%token MODULE IN OUT USE INIT NODE GNODE TRUE FALSE IF THEN ELSE AT LAST SELF FUNC
 (* 括弧 *)
 %token LBRACKET RBRACKET LPAREN RPAREN
 (* 記号 *)
@@ -66,6 +66,11 @@ definition :
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
       it = id_and_type EQUAL ge = gexpr
       { GNode(it,n,init,ge) }
+  | FUNC (* 関数定義 fun <id> (arg1:type1, arg2:type2, ...) : type = expr *)
+      id = ID LPAREN args = separated_list(COMMA,id_and_type) RPAREN COLON t = type_specific EQUAL e = expr
+      {
+        Func((id,t),args,e)
+      }
 
 (* ---------- Node or Function Expression ---------- *)
 expr :
@@ -76,6 +81,7 @@ expr :
   | id = ID LBRACKET e = expr RBRACKET { EidA(id,e) }
   | id = ID AT a = annotation { EAnnot(id,a) }
   | id = ID AT a = annotation LBRACKET e = expr RBRACKET { EAnnotA(id,a,e) }
+  | id = ID LPAREN args = separated_list(COMMA,expr) RPAREN { EApp(id,args)}
   | expr binop expr { Ebin($2,$1,$3) }
   | LPAREN expr RPAREN { $2 }
   | IF cond = expr THEN e1 = expr ELSE e2 = expr %prec prec_if { Eif(cond,e1,e2) } (* %prec prec_if down the priority of if statement *)
