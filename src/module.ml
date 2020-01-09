@@ -14,6 +14,7 @@ type node_t =
         name : string;
         t : Type.t;
         number : int;
+        default : Syntax.const option;
     }
 
 type program =
@@ -38,7 +39,7 @@ let construct_id_table (nodes : Syntax.id list) (gnodes : Syntax.id list) :
   List.iteri (fun i n -> Hashtbl.add table n i) (nodes @ gnodes) ;
   table
 
-(* 各ノード(ID)とそのノードの情報のテーブルを構築する関数 *)
+(* 各ノード(ID)とそのノードの情報のテーブル(info_table)を構築する関数 *)
 let construct_nodeinfo_table (ast : Syntax.ast)
                              (id_table : (string,int) Hashtbl.t)
                              : (int,node_t) Hashtbl.t = 
@@ -49,13 +50,13 @@ let construct_nodeinfo_table (ast : Syntax.ast)
         (function
             | Node ((name,t),_,_) ->
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number=1; }
-            | NodeA ((name,t),number,_,_) -> 
+                Hashtbl.add table id { name; t; number=1; default=None; }
+            | NodeA ((name,t),number,_,_,c) -> 
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number; }
+                Hashtbl.add table id { name; t; number; default=Some(c); }
             | GNode ((name,t), number, _, _) -> 
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number; }
+                Hashtbl.add table id { name; t; number; default=None; }
             | Func _ -> ())
         ast.definitions;
 
@@ -64,10 +65,10 @@ let construct_nodeinfo_table (ast : Syntax.ast)
         (function
             | Single (name,t) ->
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number=1; }
-            | Array ((name,t),number) -> 
+                Hashtbl.add table id { name; t; number=1; default=None; }
+            | Array ((name,t),number, c) -> 
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number; })
+                Hashtbl.add table id { name; t; number; default=c; })
         ast.in_nodes;
     table
 
@@ -83,7 +84,7 @@ let ast_to_program : Syntax.ast -> program =
         (function
           | Node ((i, _), _, _) ->
               Some i
-          | NodeA ((i, _), _, _, _) ->
+          | NodeA ((i, _), _, _, _, _) ->
               Some i
           | _ ->
               None)

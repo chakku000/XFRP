@@ -8,7 +8,7 @@ let create_id_type_dict (ast : Syntax.ast) : (Syntax.id, Type.t) Hashtbl.t =
     (function
       | Single (i, t) ->
           Hashtbl.add tbl i t
-      | Array ((i, t), _) ->
+      | Array ((i, t), _, _) ->
           Hashtbl.add tbl i t)
     ast.in_nodes ;
   (* TODO check Output/Internal Node *)
@@ -16,11 +16,12 @@ let create_id_type_dict (ast : Syntax.ast) : (Syntax.id, Type.t) Hashtbl.t =
     (function
       | Node ((i, t), _, _) ->
           Hashtbl.add tbl i t
-      | NodeA ((i, t), _, _, _) ->
+      | NodeA ((i, t), _, _, _, _) ->
           Hashtbl.add tbl i t
       | GNode ((i, t), _, _, _) ->
-          Hashtbl.add tbl i t)
-    ast.definitions ;
+          Hashtbl.add tbl i t
+      | Func _ -> ()
+    )ast.definitions ;
   tbl
 
 let print_list (lst : 'a list) (print_value : 'a -> unit) : unit =

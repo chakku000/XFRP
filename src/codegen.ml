@@ -22,12 +22,9 @@ type c_ast =
   | Binop of string * c_ast * c_ast
   | Call of string * c_ast list
   | If of
-      (Type.t * string)
-      * (* If式の結果に対応する変数名とその型 *)
-      (c_ast * c_ast)
-      * (* cond式のC言語でのAST(pre,post) *)
-      (c_ast * c_ast)
-      * (* then (pre,post) *)
+      (Type.t * string) * (* If式の結果に対応する変数名とその型 *)
+      (c_ast * c_ast) * (* cond式のC言語でのAST(pre,post) *)
+      (c_ast * c_ast) * (* then (pre,post) *)
       (c_ast * c_ast) (* else (pre,post) *)
   | CodeList of c_ast list
 
@@ -67,25 +64,23 @@ let rec string_of_c_ast (ast : c_ast) : string =(*{{{*)
   | Call (f, args) ->
       Printf.sprintf "Call[ %s ][ %s ]" f
         (List.map string_of_c_ast args |> String.concat " , ")
-  | If (_, (cond_pre, cond_post), _, _) ->
-      Printf.sprintf "If [cond_pre: [%s], cond_post:[%s]] [] []"
+  | If ((_,resvar), (cond_pre, cond_post), _, _) ->
+      Printf.sprintf "If(%s) [cond_pre: [%s], cond_post:[%s]] [] []"
+        resvar 
         (string_of_c_ast cond_pre)
         (string_of_c_ast cond_post)
   | CodeList codes ->
       List.map string_of_c_ast codes |> String.concat " :: "(*}}}*)
 
-let header_list = ["stdio.h"; "stdlib.h"]
+(* Header周り *)
+let header_list = ["stdio.h"; "stdlib.h"](*{{{*)
 let header_list2 = ["setting.h"]
-
 let header_code () =
   List.map (fun s -> "#include<" ^ s ^ ">") header_list |> String.concat "\n"
-
 let header_code2 () =
   List.map (fun s -> Printf.sprintf "#include \"%s\"" s) header_list2 |> Utils.concat_without_empty "\n"
-
 let macros = ["#define bool char"; "#define true 1"; "#define false 0"]
-
-let macro_code () = Utils.concat_without_empty "\n" macros
+let macro_code () = Utils.concat_without_empty "\n" macros(*}}}*)
 
 (* ノードの値を保存するグローバルな変数を定義 *)
 let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
@@ -93,7 +88,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
   let cpunode_to_variable = function
     | Single (i, t) ->
         Printf.sprintf "%s %s[2];" (Type.of_string t) i
-    | Array ((i, t), n) ->
+    | Array ((i, t), n, _) ->
         Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n
   in
   let input =
@@ -104,7 +99,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
       (function
         | Node ((i, t), _, _) ->
             Some (Printf.sprintf "%s %s[2];" (Type.of_string t) i)
-        | NodeA ((i, t), n, _, _) ->
+        | NodeA ((i, t), n, _, _, _) ->
             Some (Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n)
         | _ ->
             None)
@@ -179,10 +174,27 @@ let rec expr_to_clang (e : expr) (program : Module.program) : c_ast * c_ast =(*{
       (Empty, Const (Syntax.string_of_const e))
   | Eid i ->
       (Empty, Variable (i ^ "[turn]"))
-  | EidA (i, e) ->
-      (* e:添字 *)
-      let pre, post = expr_to_clang e program in
-      (pre, VariableA (Printf.sprintf "%s[turn]" i, post))
+  | EidA (i, e) -> (* e:添字 *)
+      let index_pre, index_post = expr_to_clang e program in
+      let node_id = Hashtbl.find program.id_table i in
+      let node = Hashtbl.find program.info_table node_id in
+      let result_variable = get_unique_name () in
+      (*
+       * int index_post = ...
+       * <Type.t> tmp;
+       * if(index_post < size){
+       *    tmp = i[turn][index_post];
+       * }else{
+       *    tmp = iの定数;
+       * }
+       * <post> := tmp
+       *)
+      let default_value = Option.get node.default in
+      let check_index_code = If((node.t,result_variable),
+                                (Empty, Binop("<",index_post, Variable(string_of_int node.number))),
+                                (Empty, VariableA(Printf.sprintf "%s[turn]" i, index_post)),
+                                (Empty,Const(Syntax.string_of_const default_value))) in
+      (CodeList [index_pre; check_index_code], Variable(result_variable))
   | EAnnot (id, annot) ->
       (Empty, Variable (id ^ "[turn^1]"))
   | EAnnotA (i, _, indexe) ->
@@ -315,30 +327,22 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
       , (then_pre, then_post)
       , (else_pre, else_post) ) ->
       let cond_pre_code = code_of_c_ast cond_pre tabs in
-      (* Printf.printf "check : %s\n" (string_of_c_ast cond_pre) ; *)
-      (* Printf.printf "check2 : [%s]\n" cond_pre_code ; *)
-      let if_var_dec =
-        tab ^ Printf.sprintf "%s %s;\n" (Type.of_string t) res
-      in
-      (* Ifの結果の宣言 *)
+      (* if文の結果を保存する変数宣言 *)
+      let if_var_dec = tab ^ Printf.sprintf "%s %s;" (Type.of_string t) res in
+      (* if文の条件式の結果を保存する変数の宣言と計算 *)
       let cond_var = get_unique_name () in
       let cond_var_dec =
-        tab
-        ^ Printf.sprintf "%s %s = %s;\n"
-            (Type.of_string Type.TBool)
-            cond_var
-            (code_of_c_ast cond_post 0)
+        tab ^ Printf.sprintf "bool %s = %s;" cond_var (code_of_c_ast cond_post 0)
       in
-      (* 条件の結果をcond_varに保存 *)
-      let if_st = tab ^ Printf.sprintf "if(!!%s){\n" cond_var in
+      let if_st = tab ^ Printf.sprintf "if(!!%s){" cond_var in
       let then_st1 = code_of_c_ast then_pre (tabs + 1) in
       let then_st2 =
-        tab ^ Printf.sprintf "\t%s = %s;\n" res (code_of_c_ast then_post 0)
+        tab ^ Printf.sprintf "\t%s = %s;" res (code_of_c_ast then_post 0)
       in
-      let else_st = tab ^ "}else{\n" in
+      let else_st = tab ^ "}else{" in
       let else_st1 = code_of_c_ast else_pre (tabs + 1) in
       let else_st2 =
-        tab ^ Printf.sprintf "\t%s = %s;\n" res (code_of_c_ast else_post 0)
+        tab ^ Printf.sprintf "\t%s = %s;" res (code_of_c_ast else_post 0)
       in
       let else_st3 = tab ^ "}" in
       (* 
@@ -353,8 +357,15 @@ let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
        *    res = else_post;
        * }
        * *)
-      cond_pre_code ^ if_var_dec ^ cond_var_dec ^ if_st ^ then_st1 ^ then_st2
-      ^ else_st ^ else_st1 ^ else_st2 ^ else_st3
+      Utils.concat_without_empty "\n"
+        [cond_pre_code
+        ; if_var_dec
+        ; cond_var_dec
+        ; if_st
+        ; then_st1; then_st2
+        ; else_st; else_st1; else_st2; else_st3 ]
+      (* cond_pre_code ^ "\n" ^ if_var_dec ^ "\n" ^ cond_var_dec ^ "\n" ^ if_st ^ "\n" ^ then_st1 ^ "\n" ^ then_st2 ^ "\n" *)
+      (* ^ else_st ^ "\n" ^ else_st1 ^ "\n" ^ else_st2 ^ "\n" ^ else_st3 *)
   | CodeList lst ->
       (* List.iter (fun ast -> Printf.printf "--> %s\n" (string_of_c_ast ast)) lst ; *)
       List.filter_map
@@ -437,7 +448,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
             let precode = code_of_c_ast preast 1 in
             let curcode = code_of_c_ast curast 1 in
             Some (Utils.concat_without_empty "\n" [precode; "\t"^i^"[1]="^curcode^";"])
-        | NodeA((i,t),num, Some(init), _) -> 
+        | NodeA((i,t),num, Some(init), _, _) -> 
             let pre_ast, cur_ast = expr_to_clang init prg in
             let pre_code = code_of_c_ast pre_ast 1 in
             let cur_code = code_of_c_ast cur_ast 1 in
@@ -512,13 +523,13 @@ let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
   (* 各loop関数を実装 *)
   for i = 0 to thread-1 do
     let head =
-      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n\tsynchronization(%d);\n" i) in
+      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n\tsynchronization(%d)\n" i) in
     let body = 
-      List.init max_fsd (fun i -> max_fsd - i) |> 
+      List.init (max_fsd+1) (fun i -> max_fsd - i) |> 
       List.map (fun fsd -> Printf.sprintf "\tupdate_%d_%d();" i fsd) |>
-      String.concat (Printf.sprintf "\n\tsynchronization(%d);\n" i)
+      String.concat (Printf.sprintf "\n\tsynchronization(%d)\n" i)
     in
-    let tail = Printf.sprintf "\n\tsynchronization(%d);\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
+    let tail = Printf.sprintf "\n\tsynchronization(%d)\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
     loop_functions.(i) <- head ^ body ^ tail
   done;
   loop_functions(*}}}*)
@@ -551,7 +562,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
   let node_array_update = (* Internal/Output配列ノードの更新関数を定義 *)
     List.filter_map
       (function
-        | NodeA ((i, t), _, _, e) -> Some (generate_nodearray_update i e prg)
+        | NodeA ((i, t), _, _, e, _) -> Some (generate_nodearray_update i e prg)
         | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n\n"
@@ -570,7 +581,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     List.map
       (function
         | Single (i,_) -> Printf.sprintf "void %s_update(){\n\t%s[turn]=definition_of_%s();\n}" i i i
-        | Array ((i,t),num) -> Printf.sprintf "void %s_update(int self){\n\t%s[turn][self] = definition_of_%s(self);\n}" i i i)
+        | Array ((i,t),num,_) -> Printf.sprintf "void %s_update(int self){\n\t%s[turn][self] = definition_of_%s(self);\n}" i i i)
       ast.in_nodes
         |> String.concat "\n\n" in
   let main = main_code in

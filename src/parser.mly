@@ -5,7 +5,7 @@
 %}
 
 (* 予約後 *)
-%token MODULE IN OUT USE INIT NODE GNODE TRUE FALSE IF THEN ELSE AT LAST SELF FUNC
+%token MODULE IN OUT USE INIT NODE GNODE TRUE FALSE IF THEN ELSE AT LAST SELF FUNC WITH DEFAULT
 (* 括弧 *)
 %token LBRACKET RBRACKET LPAREN RPAREN
 (* 記号 *)
@@ -55,11 +55,11 @@ top :
 definition :
   | NODE 
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      i = ID n = option(AT num = INT {num}) COLON t = type_specific EQUAL e = expr
+      i = ID n = option(AT num = INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) }) COLON t = type_specific EQUAL e = expr
       {
         match n with
         | None -> Node((i,t),init,e)
-        | Some(n) -> NodeA((i,t),n,init,e)
+        | Some(n,c) -> NodeA((i,t),n,init,e,c)
       }
   | GNODE (* gnode@1024 init[0] x: Int = ... *)
       AT n = INT
@@ -71,6 +71,10 @@ definition :
       {
         Func((id,t),args,e)
       }
+
+(* ノード配列における配列外アクセスが起きたときの挙動の指定 *)
+(* node a@1024 with default ? : Int *)
+
 
 (* ---------- Node or Function Expression ---------- *)
 expr :
@@ -97,6 +101,7 @@ gexpr :
   | gexpr binop gexpr   { Gbin($2,$1,$3) }
   | LPAREN gexpr RPAREN  { $2 }
   | IF cond = gexpr THEN e1 = gexpr ELSE e2 = gexpr %prec prec_if { Gif(cond,e1,e2) }
+
 
 (* ---------- Initialize Node value -------------------- *)
 (* restricted expression for initialize the node value *)
@@ -128,11 +133,11 @@ prime_type_specific :
 
 (* --------------- Input --------------- *)
 input_definition:
-  | i = ID n = option(AT num=INT {num}) COLON t = type_specific
+  | i = ID n = option(AT num=INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) }) COLON t = type_specific
       {
         match n with 
         | None -> Single(i,t)
-        | Some(num) -> Array((i,t),num)
+        | Some((num,c)) -> Array((i,t),num,Some(c))
       }
 
 (* --------------- Output --------------- *)
@@ -141,7 +146,7 @@ output_definition:
       {
         match n with 
         | None -> Single(i,t)
-        | Some(num) -> Array((i,t),num)
+        | Some(num) -> Array((i,t),num,None)
       }
 
 (* -------------- Operator ---------------- *)

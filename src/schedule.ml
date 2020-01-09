@@ -52,7 +52,7 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
       | Node ((node, t), _, e) ->
           let id = Hashtbl.find program.id_table node in
           Hashtbl.add ptbl id (collect_id_of_cpu e)
-      | NodeA ((node, t), _, _, e) ->
+      | NodeA ((node, t), _, _, e, _) ->
           let id = Hashtbl.find program.id_table node in
           Hashtbl.add ptbl id (collect_id_of_cpu e)
       | GNode _ -> () (* TODO GPUノードに対しても実装する必要がある *)

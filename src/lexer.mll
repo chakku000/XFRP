@@ -55,6 +55,8 @@ rule read = parse
   | "last"            { LAST }
   | "self"            { SELF }
   | "func"            { FUNC }
+  | "with"            { WITH }
+  | "default"         { DEFAULT }
   | id                { ID (Lexing.lexeme lexbuf) }
   | fdigits           { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
   | digits            { INT (int_of_string (Lexing.lexeme lexbuf)) }
