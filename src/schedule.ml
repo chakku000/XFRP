@@ -13,8 +13,7 @@ type assign_node =
 (* 返り値はノードのIDを使った隣接リスト  *)
 (* a->bと依存関係がある場合, graph[a] = {b} となる *)
 let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.t) Hashtbl.t =
-  let ptbl = Hashtbl.create 128 in
-  (* 親ノードの集合. a->bならptbl[b]={a} *)
+  let ptbl = Hashtbl.create 128 in (* 親ノードの集合. a->bならptbl[b]={a} *)
   (* Inputノード *)
   List.iter
     (fun inode ->
@@ -46,17 +45,19 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
   in
   (* TODO GPUノードの解析が未実装 *)
   (* let rec collect_id_of_gpu gexp = *)
+
+  (* ptbl(親ノードの隣接リスト)を構築 *)
   List.iter
     (function
       | Node ((node, t), _, e) ->
           let id = Hashtbl.find program.id_table node in
           Hashtbl.add ptbl id (collect_id_of_cpu e)
-      | NodeA ((node, t), _, _, e) ->
+      | NodeA ((node, t), _, _, e, _) ->
           let id = Hashtbl.find program.id_table node in
           Hashtbl.add ptbl id (collect_id_of_cpu e)
-      | GNode _ ->
-          ())
-    ast.definitions ;
+      | GNode _ -> () (* TODO GPUノードに対しても実装する必要がある *)
+      | Func _ -> ()
+    ) ast.definitions ;
 
   let ctbl = Hashtbl.create 128 in
   (* 子ノードの集合. a->bならctbl[a]={b} *)

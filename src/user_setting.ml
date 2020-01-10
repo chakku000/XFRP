@@ -5,11 +5,11 @@ let use_pthread (thread : int) : string =
   let begin_guard = "#ifdef XFRP_ON_PTHREAD" in
   let end_guard = "#endif" in
   let include_pthread = "#include <pthread.h>" in
-  let decl_thrad = Printf.sprintf "pthread_t th[%d]" thread in
+  let decl_thrad = Printf.sprintf "pthread_t th[%d];" thread in
   let fork_thread = "#define fork(i) pthread_create(th[i], NULL, loop_name(i), NULL)" in
   let decl_barrier = "pthread_barrier_t barrier;" in
   let init_barrier = "#define init_barrier(thread) pthread_barrier_init(&barrier,NULL,(thread))" in
-  let sync = "#define synchronization(tid) pthread_barrier_wait(&barrier)" in
+  let sync = "#define synchronization(tid) pthread_barrier_wait(&barrier);" in
   Utils.concat_without_empty "\n" [ begin_guard; include_pthread;
                                       decl_thrad; fork_thread;
                                       decl_barrier; init_barrier; sync;
@@ -41,7 +41,7 @@ let generate_user_setting_file (thread : int) (ast : Syntax.ast) (program : Modu
     List.map
       (function
         | Single(i,t) -> Printf.sprintf "%s definition_of_%s(){\n\treturn/*TODO:Implementation is Required*/;\n}" (Type.of_string t) i
-        | Array((i,t),_) -> Printf.sprintf "%s definitions_of_%s(int self){\n\treutrn /*TODO:Implementation is Required */;\n}" (Type.of_string t) i
+        | Array((i,t),_,_) -> Printf.sprintf "%s definition_of_%s(int self){\n\treturn /*TODO:Implementation is Required */;\n}" (Type.of_string t) i
       ) ast.in_nodes
         |> String.concat "\n\n"
   in
