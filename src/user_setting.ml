@@ -18,8 +18,8 @@ let use_pthread (thread : int) : string =
 let user_esp32 (thread : int) : string = 
   let begin_guard = "#ifdef XFRP_ON_ESP32" in
   let end_guard = "#endif" in
-  let include_arduino = "#include <Arduino..h>" in
-  let include_m5stack = "#include <M5Stack..h>" in
+  let include_arduino = "#include <Arduino.h>" in
+  let include_m5stack = "#include <M5Stack.h>" in
   let task_bits = List.init thread (fun i -> Printf.sprintf "#define TASK%d_BIT (1 << %d)" i i) |> Utils.concat_without_empty "\n" in
   let all_task_bits =
     "#define ALL_TASK_BIT (" ^
