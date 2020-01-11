@@ -405,7 +405,7 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
-let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
+let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
   (* GNodeの初期化 *)
   let init_gnode =
     List.filter_map
@@ -436,7 +436,6 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
         | _ ->
             None)
       ast.definitions
-    (* |> String.concat "\n" *)
     |> Utils.concat_without_empty "\n"
   in
   (* CPUノードの初期化を行うコードを出力 *)
@@ -460,7 +459,13 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
       ast.definitions
     |> Utils.concat_without_empty "\n"
   in
-  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; "}"] (*}}}*)
+  (* スレッドが2以上のときにスレッドをforkするコード *)
+  let thread_fork = 
+    if thread = 1 then ""
+    else List.init (thread-1) (fun i -> Printf.sprintf "\tfork(%d);" (i+1)) |> String.concat "\n"
+  in
+  (* コードの結合 *)
+  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; thread_fork; "}"] (*}}}*)
 
 (* loop関数を生成 *)
 (* 返り値 (max_fsd, assign_array2d) 
@@ -590,7 +595,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.in_nodes
         |> String.concat "\n\n" in
   let main = main_code in
-  let setup = setup_code ast prg in
+  let setup = setup_code ast prg thread in
   let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread in
   let updates =
     Array.map (fun a -> Array.to_list a |> String.concat "\n") update_function_array |> Array.to_list |> String.concat "\n" in
