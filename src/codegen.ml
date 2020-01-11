@@ -523,13 +523,18 @@ let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
   (* 各loop関数を実装 *)
   for i = 0 to thread-1 do
     let head =
-      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n\tsynchronization(%d)\n" i) in
+      let first_sync = if thread = 1 then "" else Printf.sprintf "\tsynchronization(%d)\n" i in
+      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n%s" first_sync) in
     let body = 
+      let concat_delm = if thread = 1 then "\n" else Printf.sprintf "\n\tsynchronization(%d)\n" i in
       List.init (max_fsd+1) (fun i -> max_fsd - i) |> 
       List.map (fun fsd -> Printf.sprintf "\tupdate_%d_%d();" i fsd) |>
-      String.concat (Printf.sprintf "\n\tsynchronization(%d)\n" i)
+      String.concat concat_delm
     in
-    let tail = Printf.sprintf "\n\tsynchronization(%d)\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
+    let tail = 
+      if thread = 1 then "\n\tturn^=1;\n}" 
+                    else Printf.sprintf "\n\tsynchronization(%d)\n%s}" i (if i==0 then "\tturn^=1;\n" else "")
+    in
     loop_functions.(i) <- head ^ body ^ tail
   done;
   loop_functions(*}}}*)
