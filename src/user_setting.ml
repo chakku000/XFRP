@@ -25,7 +25,7 @@ let user_esp32 (thread : int) : string =
     "#define ALL_TASK_BIT (" ^
     (List.init thread (fun i -> Printf.sprintf "TASK%d_BIT" i) |> Utils.concat_without_empty " | ") ^
     ")" in
-  let fork_thread = "#define fork(i) xTaskCreatePinnedToCore(loop_name(i),\"Task##i\",4096,NULL,1,NULL,0)" in
+  let fork_thread = "#define fork(i) xTaskCreatePinnedToCore(loop_name(i),\"Task##i\",8192,NULL,1,NULL,0)" in
   let decl_barrier = "EventGroupHandle_t barrier;" in
   let init_barrier = "#define init_barrier(thread) barrier = xEventGroupCreate();" in
   let sync = "#define synchronization(i) xEventGroupSync(barrier,TASK ## i ## _BIT ,ALL_TASK_BIT,portMAX_DELAY);" in
