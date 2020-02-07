@@ -1,0 +1,19 @@
+module HeatSimulator
+in sensor@5 with default(30) : Float
+out  T@100 : Float 
+use
+
+node delta@100 with default(0) : Float =   (if ((self/5+1)<5) then T@last[5*(self/5+1)+(self%5)] else 0)
+                                        + (if (self%5+1<5) then T@last[5*(self/5)+self%5+1] else 0)
+                                        + (if (self/5-1 >= 0) then T@last[5*(self/5-1)+self%5] else 0)
+                                        + (if (self%5-1 >= 0) then T@last[self/5*5 + self%5-1] else 0)
+                                        - T@last[self] * 4
+
+node diff@100 with default(0) : Float = delta[self] * 0.0235776
+
+node init[30] T@100 with default(90.0) : Float = if self == 0 then sensor[0] 
+                                                else if self == 9 then sensor[1]
+                                                else if self == 50 then sensor[2]
+                                                else if self == 90 then sensor[3]
+                                                else if self == 99 then sensor[4]
+                                                else T@last[self] + diff[self]
