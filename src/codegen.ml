@@ -405,7 +405,7 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
-let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
+let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
   (* GNodeの初期化 *)
   let init_gnode =
     List.filter_map
@@ -436,7 +436,6 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
         | _ ->
             None)
       ast.definitions
-    (* |> String.concat "\n" *)
     |> Utils.concat_without_empty "\n"
   in
   (* CPUノードの初期化を行うコードを出力 *)
@@ -460,7 +459,18 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) : string =(*{{{*)
       ast.definitions
     |> Utils.concat_without_empty "\n"
   in
-  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; "}"] (*}}}*)
+  (* スレッドが2以上のときにスレッドをforkするコード *)
+  let thread_fork = 
+    if thread = 1 then ""
+    else List.init (thread-1) (fun i -> Printf.sprintf "\tfork(%d);" (i+1)) |> String.concat "\n"
+  in
+  (* 同期機構の初期化 *)
+  let init_sync = 
+    if thread = 1 then ""
+    else Printf.sprintf "\tinit_barrier(%d);" thread
+  in
+  (* コードの結合 *)
+  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; init_sync; thread_fork; "}"] (*}}}*)
 
 (* loop関数を生成 *)
 (* 返り値 (max_fsd, assign_array2d) 
@@ -523,13 +533,18 @@ let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
   (* 各loop関数を実装 *)
   for i = 0 to thread-1 do
     let head =
-      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n\tsynchronization(%d)\n" i) in
+      let first_sync = if thread = 1 then "" else Printf.sprintf "\tsynchronization(%d);\n" i in
+      "void loop" ^ (if i=0 then "" else string_of_int i) ^ (Printf.sprintf "(){\n%s" first_sync) in
     let body = 
+      let concat_delm = if thread = 1 then "\n" else Printf.sprintf "\n\tsynchronization(%d);\n" i in
       List.init (max_fsd+1) (fun i -> max_fsd - i) |> 
       List.map (fun fsd -> Printf.sprintf "\tupdate_%d_%d();" i fsd) |>
-      String.concat (Printf.sprintf "\n\tsynchronization(%d)\n" i)
+      String.concat concat_delm
     in
-    let tail = Printf.sprintf "\n\tsynchronization(%d)\n%s}" i (if i==0 then "\tturn^=1;\n" else "") in
+    let tail = 
+      if thread = 1 then "\n\tturn^=1;\n}" 
+                    else Printf.sprintf "\n\tsynchronization(%d);\n%s}" i (if i==0 then "\tturn^=1;\n" else "")
+    in
     loop_functions.(i) <- head ^ body ^ tail
   done;
   loop_functions(*}}}*)
@@ -585,7 +600,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.in_nodes
         |> String.concat "\n\n" in
   let main = main_code in
-  let setup = setup_code ast prg in
+  let setup = setup_code ast prg thread in
   let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread in
   let updates =
     Array.map (fun a -> Array.to_list a |> String.concat "\n") update_function_array |> Array.to_list |> String.concat "\n" in
@@ -602,8 +617,8 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     ; node_update
     ; node_array_update
     ; gnode_update_kernel
-    ; setup
     ; updates 
     ; loops
+    ; setup
     ; main ]
   |> Utils.concat_without_empty "\n\n"(*}}}*)

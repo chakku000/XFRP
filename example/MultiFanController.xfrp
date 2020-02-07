@@ -8,4 +8,4 @@ node di@199 with default(75.0) : Float = 0.81*temp[(self+1)/2]+0.01*hmd[self/2]*
 
 node th@199 with default(75.0) : Float = 75.0 + if fan@last[self] then -0.5 else 0.5
 
-node fan@199 with default(false) : Bool = di[self] >= th[self]
+node init[false] fan@199 with default(false) : Bool = di[self] >= th[self]
