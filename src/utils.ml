@@ -18,7 +18,7 @@ let create_id_type_dict (ast : Syntax.ast) : (Syntax.id, Type.t) Hashtbl.t =
           Hashtbl.add tbl i t
       | NodeA ((i, t), _, _, _, _) ->
           Hashtbl.add tbl i t
-      | GNode ((i, t), _, _, _) ->
+      | GNode ((i, t), _, _, _, _) ->
           Hashtbl.add tbl i t
       | Func _ -> ()
     )ast.definitions ;

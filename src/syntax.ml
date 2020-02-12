@@ -91,7 +91,7 @@ type gexpr =
   | GConst of const (* 定数1,2,3とか *)
   | Gid of id (* CPUノードに対する参照 *)
   | GAnnot of id * annot
-  | GIdAt of id * gexpr (* GPUノードに対する参照. gnodeの右辺に出現するid[self+1]みたいなの *)
+  | GIdAt of id * gexpr (* ノード配列に対する参照. gnodeの右辺に出現するid[self+1]みたいなの *)
   | GIdAtAnnot of id * gexpr * annot
   | Gbin of binop * gexpr * gexpr
   | GApp of id * gexpr list
@@ -124,8 +124,7 @@ let rec string_of_expr = function
       ^ "}{ else = " ^ string_of_expr e2 ^ "}"
 
 let rec string_of_gexpr = function
-  | GSelf ->
-      "Self"
+  | GSelf -> "Self"
   | GConst c ->
       "EConst( " ^ string_of_const c ^ " )"
   | Gid i ->
@@ -150,7 +149,11 @@ let rec string_of_gexpr = function
 type definition =
   | Node of id_and_type * expr option (* init *) * expr
   | NodeA of id_and_type * int * expr option * expr * const
-  | GNode of id_and_type * int * expr option (* init *) * gexpr
+  | GNode of  id_and_type *
+              int (* array size *) *
+              expr option (* init *) *
+              const (* default value *) *
+              gexpr (* body *)
   | Func of id_and_type * (id_and_type list) * expr
 
 (* | Fun  of (id * Type.t * id list * Type.t list) * expr *)
@@ -163,10 +166,10 @@ let string_of_definition = function
   | Node (it, None, e) ->
       "Node {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = " ^ "NONE"
       ^ "\n\texpr = " ^ string_of_expr e ^ "\n}"
-  | GNode (it, n, Some ie, e) ->
+  | GNode (it, n, Some ie, def, e) ->
       "GNode {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = "
       ^ string_of_expr ie ^ "\n\texpr = " ^ string_of_gexpr e ^ "\n}"
-  | GNode (it, n, None, e) ->
+  | GNode (it, n, None, def, e) ->
       "GNode {\n\t" ^ string_of_id_and_type it ^ " ,\n\tinit = " ^ "NONE"
       ^ "\n\texpr = " ^ string_of_gexpr e ^ "\n}"
   | NodeA _ ->
@@ -178,5 +181,5 @@ type ast =
   { module_id: moduleid
   ; in_nodes: cpu_node_type list
   ; out_nodes: cpu_node_type list
-  ; use: moduleid list
+  ; use: moduleid list option
   ; definitions: definition list }

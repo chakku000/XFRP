@@ -109,7 +109,7 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
   let gnode =
     List.filter_map
       (function
-        | Syntax.GNode ((i, t), _, _, _) ->
+        | Syntax.GNode ((i, t), _, _, _, _) ->
             Some (Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i)
         | _ ->
             None)
@@ -410,7 +410,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
   let init_gnode =
     List.filter_map
       (function
-        | GNode ((i, t), n, init, _) ->
+        | GNode ((i, t), n, init, _, _) ->
             let malloc =
               Printf.sprintf
                 "\tfor(int i=0;i<2;i++) \
@@ -476,11 +476,13 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
 (* 返り値 (max_fsd, assign_array2d) 
  *  max_fsd : FSDの最大値
  *  assign_array2d : FSDがiのときにスレッドjが更新する更新関数 *)
-let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int* string array array = 
+let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int * string array array = 
   (* scheduled : スケジューリングされたノード *)
   (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
   (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
   let scheduled : (int * ((Schedule.assign_node list) array)) array = Schedule.assign_to_cpu ast program thread in
+
+
   let max_fsd = Array.length scheduled - 1 in
   (* update_x_y関数を生成*)
   (* update_x_y関数はスレッドxが担当するFSDがyのノード集合 *)
@@ -585,7 +587,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
   let gnode_update_kernel = (* GPUノードの更新関数を定義 *)
     List.filter_map
       (function
-        | GNode ((i, t), _, _, e) ->
+        | GNode ((i, t), _, _, _, e) ->
             Some (Gpu.generate_gnode_update_kernel i e ast prg)
         | _ ->
             None)

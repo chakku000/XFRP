@@ -9,19 +9,19 @@ type assign_node =
     | Single of int 
     | Array of int * (int * int) (* ノードID * (開始インデックス * 修了インデックス) *)
 
-(* 依存グラフの構築 *)
-(* 返り値はノードのIDを使った隣接リスト  *)
-(* a->bと依存関係がある場合, graph[a] = {b} となる *)
+(* Construct dependency graph
+ * This function returns the adjency list of the graph. The list uses the `node id`.
+ * If there is a dependency such as `a` -> `b`, `graph` which the data this function returns is graph[a] = {b}.
+ * *)
 let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.t) Hashtbl.t =
-  let ptbl = Hashtbl.create 128 in (* 親ノードの集合. a->bならptbl[b]={a} *)
-  (* Inputノード *)
-  List.iter
-    (fun inode ->
-      Hashtbl.add ptbl (Hashtbl.find program.id_table inode) IntSet.empty)
-    program.input ;
-  (* Internal/Outputノード *)
-  let rec collect_id_of_cpu expr =
-    (* exprの部分木に含まれるIDの集合 *)
+  (* The set of parent nodes. *)
+  let ptbl = Hashtbl.create 128 in
+
+  (* Add input node to `ptbl` *)
+  List.iter (fun inode -> Hashtbl.add ptbl (Hashtbl.find program.id_table inode) IntSet.empty) program.input;
+
+  (* The function that collects the set of id. *)
+  let rec collect_nodeid expr =
     match expr with
     | ESelf | EConst _ | EAnnot _ | EAnnotA _ ->
         IntSet.empty
@@ -29,33 +29,52 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
         Hashtbl.find program.id_table i |> IntSet.singleton
     | EidA (i, e) ->
         let id1 = Hashtbl.find program.id_table i in
-        let index_set = collect_id_of_cpu e in
+        let index_set = collect_nodeid e in
         IntSet.add id1 index_set
     | Ebin (_, e1, e2) ->
-        IntSet.union (collect_id_of_cpu e1) (collect_id_of_cpu e2)
+        IntSet.union (collect_nodeid e1) (collect_nodeid e2)
     | EUni (_, e) ->
-        collect_id_of_cpu e
+        collect_nodeid e
     | EApp (_, args) ->
         List.fold_left
-          (fun acc elm -> IntSet.union acc (collect_id_of_cpu elm))
+          (fun acc elm -> IntSet.union acc (collect_nodeid elm))
           IntSet.empty args
     | Eif (cond, e1, e2) ->
-        IntSet.union (collect_id_of_cpu cond)
-          (IntSet.union (collect_id_of_cpu e1) (collect_id_of_cpu e2))
+        IntSet.union (collect_nodeid cond)
+          (IntSet.union (collect_nodeid e1) (collect_nodeid e2))
   in
-  (* TODO GPUノードの解析が未実装 *)
-  (* let rec collect_id_of_gpu gexp = *)
+  let rec collect_gnodeid gexpr = 
+    match gexpr with
+    | GSelf -> IntSet.empty
+    | GConst _ -> IntSet.empty
+    (* CPUノード *)
+    | Gid nodename -> Hashtbl.find program.id_table nodename|> IntSet.singleton
+    (* CPUノード+@last *)
+    | GAnnot _ -> IntSet.empty
+    (* ノード配列に対する参照 *)
+    | GIdAt (nodesymbol, ge_index) -> 
+        let id = Hashtbl.find program.id_table nodesymbol |> IntSet.singleton in
+        let index_set = collect_gnodeid ge_index in
+        IntSet.union id index_set
+    | GIdAtAnnot _ -> IntSet.empty
+    | Gbin (op, ge1, ge2) -> IntSet.union (collect_gnodeid ge1) (collect_gnodeid ge2)
+    | GApp (funname, args) -> List.fold_left (fun acc ge -> IntSet.union acc (collect_gnodeid ge)) IntSet.empty args
+    | Gif (ge_if, ge_then, ge_else) -> IntSet.union (collect_gnodeid ge_if) (IntSet.union (collect_gnodeid ge_then) (collect_gnodeid ge_else))
+  in
 
+  (* TODO GPUノードの解析が未実装 *)
   (* ptbl(親ノードの隣接リスト)を構築 *)
   List.iter
     (function
       | Node ((node, t), _, e) ->
           let id = Hashtbl.find program.id_table node in
-          Hashtbl.add ptbl id (collect_id_of_cpu e)
+          Hashtbl.add ptbl id (collect_nodeid e)
       | NodeA ((node, t), _, _, e, _) ->
           let id = Hashtbl.find program.id_table node in
-          Hashtbl.add ptbl id (collect_id_of_cpu e)
-      | GNode _ -> () (* TODO GPUノードに対しても実装する必要がある *)
+          Hashtbl.add ptbl id (collect_nodeid e)
+      | GNode ((nodename,t), _, _, _, ge) -> 
+          let id = Hashtbl.find program.id_table nodename in
+          Hashtbl.add ptbl id (collect_gnodeid ge)
       | Func _ -> ()
     ) ast.definitions ;
 
@@ -80,17 +99,8 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
 
   ctbl
 
-(* 各ノードのFSDを求める関数 *)
 let calc_fsd (ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t = 
     let graph = construct_graph ast prog in
-
-    (* test output*)
-    (* print_endline "-----> Graph";
-    Hashtbl.iter
-        (fun key set -> Printf.printf "%d : " key; Utils.print_set (module IntSet) set print_int; print_newline ())
-        graph;
-    print_endline "Graph <-----"; *)
-
     let fsd = Hashtbl.create 128 in
     let rec dfs (cur : int) : int =
         if (Hashtbl.mem fsd cur) then (Hashtbl.find fsd cur)
@@ -111,6 +121,10 @@ let calc_fsd (ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t =
 (* 返り値retにたいしてret[d]でFSDがdのノードの集合 *)
 let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) array = 
     let fsd_table = calc_fsd ast prog in
+    (* debug *)
+    Printf.eprintf "====== FSD =====\n";
+    Hashtbl.iter (fun id fsd -> Printf.eprintf "ID(%d) -> %d\n" id fsd) fsd_table;
+    Printf.eprintf "================\n";
     let max_dist = Hashtbl.fold (fun _ v acc -> max v acc) fsd_table 0 in
     (* test output *)
     (* Printf.printf "Max_distance : %d\n" max_dist; *)
@@ -190,20 +204,21 @@ let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module
 let assign_to_cpu (ast : Syntax.ast) (program: Module.program) (thread : int) : (int * ((assign_node list) array)) array =
   let dist_array = collect_same_fsd ast program in (* dist_array[i] : FSDがiのノードの集合 *)
   (* デバッグ出力 *)
-  (* let max_distance = Array.length dist_array -1 in *)(*{{{*)
-  (* Array.iteri *)
-  (*       (fun i lst -> *)
-  (*         let assigned = schedule_fsd i lst thread program in *)
-  (*         Array.iteri (1* 出力 *1) *)
-  (*               (fun id lst -> *)
-  (*                 Printf.printf "core%d : " id; *)
-  (*                   List.iter (function *)
-  (*                     | Single id -> Printf.printf "%d," id *)
-  (*                       | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t) *)
-  (*                   lst; *)
-  (*                   Printf.printf "\n" *)
-  (*               ) assigned) *)
-  (*       dist_array; *)(*}}}*)
+  (* TODO undo debug *)
+  let max_distance = Array.length dist_array -1 in
+  Array.iteri 
+        (fun i lst -> 
+          let assigned = schedule_fsd i lst thread program in 
+          Array.iteri (* 出力 *) 
+                (fun id lst -> 
+                  Printf.printf "core%d : " id; 
+                    List.iter (function 
+                      | Single id -> Printf.printf "%d," id 
+                        | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t) 
+                    lst; 
+                    Printf.printf "\n" 
+                ) assigned) 
+        dist_array;
 
   (* (FSDの値, 各CPUコアが担当するノードのリストの配列)を返す *)
   Array.mapi

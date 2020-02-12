@@ -15,15 +15,17 @@ let input_file = ref None
 (* Parallel *)
 let thread = ref 1
 
+(* Use GPU *)
+let use_gpu = ref false
+
 (* Analyze command line argument *)
 let speclist =
   [ (* tuple of (key=string,spec,doc=string) *)
     ( "-o"
     , Arg.String (fun s -> output_file := Some s)
     , "[file] Write Output file" );
-    (   "-thread",
-        Arg.Int (fun v -> thread := v),
-        "[thread] The parallel degree" )
+    ( "-thread", Arg.Int (fun v -> thread := v), "[thread] The parallel degree" );
+    ( "-gpu" , Arg.Bool (fun b -> use_gpu := b), "[gpu] Use GPU or not (true/false)");
   ]
 
 let compile in_c : string =
@@ -32,24 +34,11 @@ let compile in_c : string =
     let ast : Syntax.ast = Parser.top Lexer.read lexbuf in
     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
     let program = Module.ast_to_program ast in
+    (* debug *)
+    Module.show_id_table program;
 
     (* C/C++のソースコード *)
     let code : string = Codegen.code_of_ast ast program !thread in
-
-    (* 各ノードとIDの対応をテスト出力 *)
-    (* print_endline "-----> ID_TABLE";
-    Hashtbl.iter (fun name id -> Printf.printf "%s : %d\n" name id) program.id_table;
-    print_endline "ID_TABLE <-----";*)
-
-    (* 各FSDの値のノードのリスト *)
-    (* let dist_array = Schedule.collect_same_fsd ast program in *)
-
-    (* test output : dist_arrayの出力 *)
-    (* let string_of_lst lst = 
-        let lst2 = List.map (fun v -> string_of_int v) lst in
-        "[" ^ (String.concat "," lst2) ^ "]"
-    in
-    Array.iteri (fun i v -> Printf.printf "%d : %s\n" i (string_of_lst v)) dist_array; *)
 
     (* ユーザー設定の部分を含むコードを出力する *)
     User_setting.generate_user_setting_file !thread ast program;

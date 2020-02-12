@@ -1,0 +1,9 @@
+module XFRPGPU
+in  pic@1024 with default(0) : Int
+out outpic@1024 : Int
+
+gnode picg@1024 with default(0) : Int = pic[self]
+
+gnode mosaic@1024 with default(0) : Int = picg[self]+100
+
+node outpic@1024 with default(0) : Int = mosaic[self]

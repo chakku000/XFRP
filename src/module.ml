@@ -18,18 +18,19 @@ type node_t =
     }
 
 type program =
-  { id: Syntax.moduleid
-  ; input: Syntax.id list
-  ; (* list of identifier of input node *)
-    output: Syntax.id list
-  ; (* list of identifier of output node *)
-    node: Syntax.id list
-  ; (* list of identifier of nodes. It includes input, output, and internal nodes. Not that gnode is not contained *)
-    gnode: Syntax.id list
-  ; (* list of gpu node *)
-    id_table: (string, int) Hashtbl.t
-  ;
-    info_table : (int,node_t) Hashtbl.t
+  { id: Syntax.moduleid ;
+    (* The list of identifier of input nodes. *)
+    input: Syntax.id list ;
+    output: Syntax.id list ; (* list of identifier of output node *)
+    node: Syntax.id list ; (* list of identifier of nodes. It includes input, output, and internal nodes. Not that gnode is not contained *)
+    gnode: Syntax.id list ; (* list of gpu node *)
+    id_table: (string, int) Hashtbl.t ;
+
+    (* A dictionary which contains the information of Node/GNode.
+     * The information contains name, type of node.
+     * Also, the table contains the number of node and default value when the node is array or gnode.
+     * When the node is single node, the number of node is setted to 1. *)
+    info_table : (int,node_t) Hashtbl.t;
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
@@ -54,9 +55,9 @@ let construct_nodeinfo_table (ast : Syntax.ast)
             | NodeA ((name,t),number,_,_,c) -> 
                 let id = Hashtbl.find id_table name in
                 Hashtbl.add table id { name; t; number; default=Some(c); }
-            | GNode ((name,t), number, _, _) -> 
+            | GNode ((name,t), number, _, c, _) -> 
                 let id = Hashtbl.find id_table name in
-                Hashtbl.add table id { name; t; number; default=None; }
+                Hashtbl.add table id { name; t; number; default=Some(c); }
             | Func _ -> ())
         ast.definitions;
 
@@ -71,6 +72,9 @@ let construct_nodeinfo_table (ast : Syntax.ast)
                 Hashtbl.add table id { name; t; number; default=c; })
         ast.in_nodes;
     table
+
+    (* TODO Add GNode to info_table *)
+
 
 (* ASTから依存関係を抽出 *)
 let ast_to_program : Syntax.ast -> program =
@@ -95,7 +99,7 @@ let ast_to_program : Syntax.ast -> program =
   (* gpu nodeのリストを構築 *)
   let gnode =
     List.filter_map
-      (function GNode ((i, _), _, _, _) -> Some i | _ -> None)
+      (function GNode ((i, _), _, _, _, _) -> Some i | _ -> None)
       ast.definitions
   in
   let id_table = construct_id_table node gnode in
@@ -112,3 +116,9 @@ let print_program prog : unit =
 
 (* プログラム中のノードの数. Gnodeは展開前の1つで計算する *)
 let node_num prog : int = Hashtbl.length prog.id_table
+
+(* デバッグ用関数 *)
+let show_id_table prg = 
+  Printf.eprintf "========== ID Table ==========\n";
+  Hashtbl.iter (fun k v -> Printf.eprintf "%s : %d\n" k v) prg.id_table;
+  Printf.eprintf "==============================\n";

@@ -38,7 +38,7 @@ top :
   | MODULE id = ID
     IN innodes  = separated_list(COMMA,input_definition)
     OUT outnodes= separated_list(COMMA,output_definition)
-    USE modules = separated_list(COMMA,ID)
+    use = option(USE modules = separated_list(COMMA,ID) { modules })
     defs = nonempty_list(definition)
   EOF
   { (* Syntax.top *)
@@ -46,7 +46,7 @@ top :
       module_id = id;
       in_nodes = innodes;
       out_nodes = outnodes;
-      use = modules;
+      use = use;
       definitions = defs;
     }
   }
@@ -55,17 +55,21 @@ top :
 definition :
   | NODE 
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      i = ID n = option(AT num = INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) }) COLON t = type_specific EQUAL e = expr
+      i = ID n = option(AT num = INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) })
+      COLON t = type_specific EQUAL e = expr
       {
         match n with
         | None -> Node((i,t),init,e)
         | Some(n,c) -> NodeA((i,t),n,init,e,c)
       }
-  | GNODE (* gnode@1024 init[0] x: Int = ... *)
-      AT n = INT
+  | GNODE (* gnode init[0] x@1024 : Int = ... *)
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      it = id_and_type EQUAL ge = gexpr
-      { GNode(it,n,init,ge) }
+      id = ID AT num = INT WITH DEFAULT LPAREN c = constant RPAREN
+      COLON t = type_specific
+        EQUAL ge = gexpr
+      {
+        GNode((id,t), num, init, c, ge)
+      }
   | FUNC (* 関数定義 fun <id> (arg1:type1, arg2:type2, ...) : type = expr *)
       id = ID LPAREN args = separated_list(COMMA,id_and_type) RPAREN COLON t = type_specific EQUAL e = expr
       {
