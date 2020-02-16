@@ -496,11 +496,24 @@ let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (t
           List.map (fun nodeinfo -> 
             match nodeinfo with
             | Schedule.Single (nodeid) ->
+                (* Return the update method of cpu node which corresponds to `nodeid`.  *)
+                (* Returns the following code. *)
+                (* node_udpate(); *)
                 let info = Hashtbl.find program.info_table nodeid in
                 Printf.sprintf "\t%s_update();" info.name
             | Schedule.Array (nodeid, (startindex, endindex))->
+                (* Return the update method of cpu node array which corresponds to `nodeid`. *)
+                (* The update of cpu node array is done by using loop iteration.
+                 * It means that the cpu node array update is done by following code. *)
+                (* for(int i=0;i<N; i++) node_update(i); *)
                 let info = Hashtbl.find program.info_table nodeid in
                 Printf.sprintf "\tfor(int i=%d;i<%d;i++) %s_update(i);" startindex endindex info.name
+            | Schedule.GArray nodeid ->
+                (* Return the update method of gpu node corresponds to `nodeid`. *)
+                (* Returns the following code. *)
+                (* gnode_update(); *)
+                let info = Hashtbl.find program.info_table nodeid in
+                Printf.sprintf "\t%s_update();" info.name
           ) list_of_each_thread
         in
         (* 更新関数のリストを結合すればよい *)

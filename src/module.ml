@@ -22,7 +22,7 @@ type program =
     (* The list of identifier of input nodes. *)
     input: Syntax.id list ;
     output: Syntax.id list ; (* list of identifier of output node *)
-    node: Syntax.id list ; (* list of identifier of nodes. It includes input, output, and internal nodes. Not that gnode is not contained *)
+    node: Syntax.id list ; (* list of identifier of nodes. It includes input, output, and internal nodes. Note that gnode is not contained *)
     gnode: Syntax.id list ; (* list of gpu node *)
     id_table: (string, int) Hashtbl.t ;
 
@@ -31,6 +31,7 @@ type program =
      * Also, the table contains the number of node and default value when the node is array or gnode.
      * When the node is single node, the number of node is setted to 1. *)
     info_table : (int,node_t) Hashtbl.t;
+
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
