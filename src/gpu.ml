@@ -276,29 +276,40 @@ let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
 (* For the gpu node array `x`, this function reaturns the function `x_update()`. *)
 let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) = 
   let kernel_function = generate_gnode_update_kernel name gexpr ast program in
+
+  (* Declaration of update function that is called from CPU. *)
   let declare = Printf.sprintf "void %s_update(){" name in
+
+  (* Argument Information for Kernel Function. *)
   let kernel_arguments = collect_argument gexpr program in
   let single, nodearray, gnode = kernel_arguments in
   let single_now, single_last = single in
   let array_now, array_last = nodearray in
   let gnode_now, gnode_last = gnode in
-  Printf.eprintf "===== GNode %s =====\n"  name;
-  Printf.eprintf "single(now) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  single_now;
-  Printf.eprintf "\n";
-  Printf.eprintf "single(last) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  single_last;
-  Printf.eprintf "\n";
-  Printf.eprintf "array(now) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  array_now;
-  Printf.eprintf "\n";
-  Printf.eprintf "array(last) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  array_last;
-  Printf.eprintf "\n";
-  Printf.eprintf "gnode(now) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_now;
-  Printf.eprintf "\n";
-  Printf.eprintf "gnode(last) : ";
-  IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_last;
-  Printf.eprintf "\n";
-  Utils.concat_without_empty "\n" [kernel_function; declare; "}"]
+  (* Printf.eprintf "===== GNode %s =====\n"  name; *)
+  (* Printf.eprintf "single(now) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  single_now; *)
+  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "single(last) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  single_last; *)
+  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "array(now) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  array_now; *)
+  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "array(last) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  array_last; *)
+  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "gnode(now) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_now; *)
+  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "gnode(last) : "; *)
+  (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_last; *)
+  (* Printf.eprintf "\n"; *)
+
+  (* Call Kernel Function *)
+  let call_kernel =
+    let kernel_size = string_of_int 10 in (* TODO Kernel Size is the size of GNode *)
+    let arguments = "abc" in (* TODO Construct Arguments *)
+    Printf.sprintf "\t%s_kernel<<<%s>>>(%s)" name kernel_size arguments
+  in
+  Utils.concat_without_empty "\n" [kernel_function; declare; call_kernel; "}"]
