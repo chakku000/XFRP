@@ -404,6 +404,13 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
   in
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
+(* Return the update function of gpu node array. *)
+(* For the gpu node array `x`, this function reaturns the function `x_update()`. *)
+(* let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) = *) 
+(*   let kernel_function = Gpu.generate_gnode_update_kernel name gexpr ast program in *)
+(*   let declare = Printf.sprintf "void %s_update(){" name in *)
+(*   Utils.concat_without_empty "\n" [kernel_function; "\n"; declare; "}"] *)
+
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
 let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
   (* GNodeの初期化 *)
@@ -597,11 +604,20 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |> Utils.concat_without_empty "\n\n"
   in
-  let gnode_update_kernel = (* GPUノードの更新関数を定義 *)
+  (* let gpu_kernel : string = *) 
+  (*   List.filter_map *)
+  (*     (function *)
+  (*       | GNode ((i,t), _, _, _, e) -> *) 
+  (*           Some(Gpu.generate_gnode_update_kernel i e ast prg) *)
+  (*       | _ -> None) *)
+  (*     ast.definitions *)
+  (*   |>  Utils.concat_without_empty "\n" *)
+  (* in *)
+  let gnode_update = (* GPUノードの更新関数を定義 *)
     List.filter_map
       (function
         | GNode ((i, t), _, _, _, e) ->
-            Some (Gpu.generate_gnode_update_kernel i e ast prg)
+            Some (Gpu.generate_gpu_node_array_update i e ast prg)
         | _ ->
             None)
       ast.definitions
@@ -628,10 +644,11 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     ; macros
     ; variables
     ; functions
+    (* ; gpu_kernel *)
     ; input_node_update_functions
     ; node_update
     ; node_array_update
-    ; gnode_update_kernel
+    ; gnode_update
     ; updates 
     ; loops
     ; setup

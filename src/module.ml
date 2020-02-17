@@ -24,6 +24,8 @@ type program =
     output: Syntax.id list ; (* list of identifier of output node *)
     node: Syntax.id list ; (* list of identifier of nodes. It includes input, output, and internal nodes. Note that gnode is not contained *)
     gnode: Syntax.id list ; (* list of gpu node *)
+
+    (* A dictionary which maps from the node symbol(string) to node id(int). *)
     id_table: (string, int) Hashtbl.t ;
 
     (* A dictionary which contains the information of Node/GNode.
@@ -32,6 +34,7 @@ type program =
      * When the node is single node, the number of node is setted to 1. *)
     info_table : (int,node_t) Hashtbl.t;
 
+    single_nodes : IntSet.t;
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
@@ -74,7 +77,6 @@ let construct_nodeinfo_table (ast : Syntax.ast)
         ast.in_nodes;
     table
 
-    (* TODO Add GNode to info_table *)
 
 
 (* ASTから依存関係を抽出 *)
@@ -105,8 +107,18 @@ let ast_to_program : Syntax.ast -> program =
   in
   let id_table = construct_id_table node gnode in
   let info_table = construct_nodeinfo_table ast id_table in
-  (* Hashtbl.iter (fun n i -> Printf.printf "%d %s\n" i n) id_table ; *)
-  {id= ast.module_id; input; output; node; gnode; id_table; info_table; }
+  let single_nodes = 
+    let single_list = List.filter_map
+      (fun symbol ->
+        let id = Hashtbl.find id_table symbol in
+        let info = Hashtbl.find info_table id in
+        if info.number = 1  then Some(id)
+                            else None)
+      node
+    in
+    IntSet.of_list single_list
+  in
+  {id= ast.module_id; input; output; node; gnode; id_table; info_table; single_nodes;}
 
 let print_program prog : unit =
   Printf.printf "Module : %s\n" prog.id ;
