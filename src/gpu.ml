@@ -308,8 +308,56 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
 
   (* Call Kernel Function *)
   let call_kernel =
-    let kernel_size = string_of_int 10 in (* TODO Kernel Size is the size of GNode *)
-    let arguments = "abc" in (* TODO Construct Arguments *)
-    Printf.sprintf "\t%s_kernel<<<%s>>>(%s)" name kernel_size arguments
+    let kernel_size =
+      let id = Hashtbl.find program.id_table name in
+      let info = Hashtbl.find program.info_table id in
+      info.number
+    in
+    let arguments =
+      let arg_single_now = IntSet.fold
+                            (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                            single_now
+                            ""
+      in
+      let arg_single_last = IntSet.fold
+                              (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                              let arg = Printf.sprintf "%s[turn^1]" info.name in
+                                              if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                              single_last
+                              ""
+      in
+      let arg_array_now = IntSet.fold
+                            (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                            array_now
+                            ""
+      in
+      let arg_array_last = IntSet.fold
+                            (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                            array_last
+                            ""
+      in
+      let arg_gnode_now = IntSet.fold
+                            (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                            gnode_now
+                            ""
+      in
+      let arg_gnode_last = IntSet.fold
+                            (fun id acc ->  let info = Hashtbl.find program.info_table id in
+                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+                            gnode_last
+                            ""
+      in
+      Utils.concat_without_empty ", " [arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
+    in
+    Printf.sprintf "\t%s_kernel<<<%d>>>(%s)" name kernel_size arguments
   in
   Utils.concat_without_empty "\n" [kernel_function; declare; call_kernel; "}"]
