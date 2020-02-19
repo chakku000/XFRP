@@ -134,149 +134,98 @@ let collect_argument (gexpr : Syntax.gexpr) (program : Module.program) =
   (collect_single_node gexpr, collect_node_array gexpr, collect_gnode gexpr)
 
 
-let generate_gnode_update_kernel (name : string) (expr : Syntax.gexpr)
-    (ast : Syntax.ast) (program : Module.program) : string =
-  let kernel_name = Printf.sprintf "__global__ void %s_kernel(){" name in
-  let id_to_type_table = Utils.create_id_type_dict ast in
-  let rec collect_node_deps e =
-    match e with
-    | GSelf ->
-        StringSet.empty
-    | GConst _ ->
-        StringSet.empty
-    | Gid id ->
-        if List.exists (String.equal id) program.node then
-          StringSet.singleton id
-        else StringSet.empty
-    | GAnnot (_, _) ->
-        StringSet.empty
-    | GIdAt (i, idx) ->
-        StringSet.empty
-    | GIdAtAnnot (i, idx, _) ->
-        StringSet.empty
-    | Gbin (_, e1, e2) ->
-        StringSet.union (collect_node_deps e1) (collect_node_deps e2)
-    | GApp (_, el) ->
-        List.fold_left
-          (fun acc elm -> StringSet.union acc (collect_node_deps elm))
-          StringSet.empty el
-    | Gif (ce, e1, e2) ->
-        StringSet.union (collect_node_deps ce)
-          (StringSet.union (collect_node_deps e1) (collect_node_deps e2))
+(* This function returns the head of kernel function. *)
+(* It means that this returns, for example, "void update_kernel(int arg1, int arg2,...){" *)
+let generate_kernel_head (name : string) (program : Module.program)
+                                          (arg_single_now : IntSet.t) (arg_single_last : IntSet.t)
+                                          (arg_array_now : IntSet.t) (arg_array_last : IntSet.t)
+                                          (arg_gnode_now : IntSet.t) (arg_gnode_last : IntSet.t)
+                                         : string = 
+  let types_single_now = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = Type.of_string info.t in
+        let arg_name = info.name in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_single_now
+      ""
   in
-  let rec collect_node_atlast_deps e =
-    match e with
-    | GSelf | GConst _ | Gid _ ->
-        StringSet.empty
-    | GAnnot (id, _) ->
-        if List.exists (String.equal id) program.node then
-          StringSet.singleton id
-        else StringSet.empty
-    | GIdAt _ | GIdAtAnnot _ ->
-        StringSet.empty
-    | Gbin (_, e1, e2) ->
-        StringSet.union
-          (collect_node_atlast_deps e1)
-          (collect_node_atlast_deps e2)
-    | GApp (_, el) ->
-        List.fold_left
-          (fun acc elm -> StringSet.union acc (collect_node_atlast_deps elm))
-          StringSet.empty el
-    | Gif (ce, e1, e2) ->
-        StringSet.union
-          (collect_node_atlast_deps ce)
-          (StringSet.union
-             (collect_node_atlast_deps e1)
-             (collect_node_atlast_deps e2))
+  let types_single_last = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = Type.of_string info.t in
+        let arg_name = info.name ^ "_ATLAST" in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_single_last
+      ""
   in
-  let rec collect_gnode_deps e =
-    match e with
-    | GSelf | GConst _ | Gid _ | GAnnot _ ->
-        StringSet.empty
-    | GIdAt (i, _) ->
-        StringSet.singleton i
-    | GIdAtAnnot _ ->
-        StringSet.empty
-    | Gbin (_, e1, e2) ->
-        StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2)
-    | GApp (_, el) ->
-        List.fold_left
-          (fun acc elm -> StringSet.union acc (collect_gnode_deps elm))
-          StringSet.empty el
-    | Gif (ce, e1, e2) ->
-        StringSet.union (collect_gnode_deps ce)
-          (StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2))
+  let types_array_now = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = (Type.of_string info.t) ^ "*" in
+        let arg_name = info.name in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_array_now
+      ""
   in
-  let rec collect_gnode_atlast_deps e =
-    match e with
-    | GSelf | GConst _ | Gid _ | GAnnot _ | GIdAt _ ->
-        StringSet.empty
-    | GIdAtAnnot (id, _, _) ->
-        StringSet.singleton id
-    | Gbin (_, e1, e2) ->
-        StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2)
-    | GApp (_, el) ->
-        List.fold_left
-          (fun acc elm -> StringSet.union acc (collect_gnode_deps elm))
-          StringSet.empty el
-    | Gif (ce, e1, e2) ->
-        StringSet.union (collect_gnode_deps ce)
-          (StringSet.union (collect_gnode_deps e1) (collect_gnode_deps e2))
+  let types_array_last = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = (Type.of_string info.t) ^ "*" in
+        let arg_name = info.name ^ "_ATLAST" in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_array_last
+      ""
   in
-  let node_set = collect_node_deps expr in
-  let node_atlast_set = collect_node_atlast_deps expr in
-  let gnode_set = collect_gnode_deps expr in
-  let gnode_atlast_ast = collect_gnode_atlast_deps expr in
-  let normal_args =
-    StringSet.elements node_set
-    |> List.map (fun nd ->
-           Printf.sprintf "%s %s"
-             (Hashtbl.find id_to_type_table nd |> Type.of_string)
-             nd)
-    |> String.concat ", "
+  let types_gnode_now = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = (Type.of_string info.t) ^ "*" in
+        let arg_name = info.name in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_gnode_now
+      ""
   in
-  let last_args =
-    StringSet.elements node_atlast_set
-    |> List.map (fun nd ->
-           Printf.sprintf "%s %s_ATLAST"
-             (Hashtbl.find id_to_type_table nd |> Type.of_string)
-             nd)
-    |> String.concat ","
+  let types_gnode_last = 
+    IntSet.fold
+      (fun id acc ->
+        let info = Hashtbl.find program.info_table id in
+        let t = (Type.of_string info.t) ^ "*" in
+        let arg_name = info.name ^ "_ATLAST" in
+        let arg = t ^ " " ^ arg_name in
+        if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
+      arg_gnode_last
+      ""
   in
-  let gpu_args =
-    StringSet.elements gnode_set
-    |> List.map (fun nd ->
-           Printf.sprintf "%s* %s"
-             (Hashtbl.find id_to_type_table nd |> Type.of_string)
-             nd)
-    |> String.concat "n"
+  let args = Utils.concat_without_empty ", " [types_single_now; types_single_last; types_array_now; types_array_last; types_gnode_now; types_gnode_last]
   in
-  let gpu_atlast_args =
-    StringSet.elements gnode_atlast_ast
-    |> List.map (fun nd ->
-           Printf.sprintf "%s* %s_ATLAST"
-             (Hashtbl.find id_to_type_table nd |> Type.of_string)
-             nd)
-    |> String.concat "\n"
-  in
-  let args =
-    (* 順序は @lastがついてないノード -> @lastがついているノード -> gnodeの引数 となる. それぞれの中では辞書順で並んでいる *)
-    "("
-    ^ String.concat ","
-        (List.filter
-           (fun l -> String.length l > 0)
-           [normal_args; last_args; gpu_args; gpu_atlast_args])
-    ^ ")"
-  in
-  kernel_name ^ args ^ "{\n" ^ "\t" ^ self_index_expr
-  ^ "\n" ^ "}"
+  Printf.sprintf "__global__ void %s_kernel(%s){" name args
+
+(* Generate the cuda kernel for updating the gpu node. *)
+(* The argument `head` is the first line of the definition of kernel *)
+let generate_gnode_update_kernel (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) (head: string) : string =
+  let kernel_name = head in
+  let self_index_expr = "\tint self = blockIdx.x * blockDim.x + threadIdx.x;" in
+  let cuda_ast_pre, cuda_ast_post = Target.convert_from_gexpr_to_cudaAST gexpr program in
+  let cuda_code_pre = Target.convert_cudaAST_to_code cuda_ast_pre 1 in
+  let cuda_code_post = Target.convert_cudaAST_to_code cuda_ast_post 0 in
+  let cuda_code_post_assign = Printf.sprintf "\t%s[self] = %s;" name cuda_code_post in
+  Utils.concat_without_empty "\n" [kernel_name; self_index_expr; cuda_code_pre; cuda_code_post_assign ; "}"]
 
 
 (* Return the update function of gpu node array. *)
 (* For the gpu node array `x`, this function reaturns the function `x_update()`. *)
 let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) = 
-  let kernel_function = generate_gnode_update_kernel name gexpr ast program in
-
   (* Declaration of update function that is called from CPU. *)
   let declare = Printf.sprintf "void %s_update(){" name in
 
@@ -305,6 +254,12 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
   (* Printf.eprintf "gnode(last) : "; *)
   (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_last; *)
   (* Printf.eprintf "\n"; *)
+
+  (* Create Kernel Function *)
+  let kernel = 
+    let head = generate_kernel_head name program single_now single_last array_now array_last gnode_now gnode_last in
+    generate_gnode_update_kernel name gexpr ast program head
+  in
 
   (* Call Kernel Function *)
   let call_kernel =
@@ -358,6 +313,6 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
       in
       Utils.concat_without_empty ", " [arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
     in
-    Printf.sprintf "\t%s_kernel<<<%d>>>(%s)" name kernel_size arguments
+    Printf.sprintf "\t%s_kernel<<<%d>>>(%s);" name kernel_size arguments
   in
-  Utils.concat_without_empty "\n" [kernel_function; declare; call_kernel; "}"]
+  Utils.concat_without_empty "\n" [kernel ; declare; call_kernel; "}"]

@@ -35,6 +35,9 @@ type program =
     info_table : (int,node_t) Hashtbl.t;
 
     single_nodes : IntSet.t;
+
+    (* A dictionary that save the type of function *)
+    func_table : (string, Type.t) Hashtbl.t;
   }
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
@@ -77,11 +80,20 @@ let construct_nodeinfo_table (ast : Syntax.ast)
         ast.in_nodes;
     table
 
+(* This function returns the dictionary whose key is the name of function and the value of dictionary is the return type of function. *)
+let construct_funtion_table (ast : Syntax.ast) : (string,Type.t) Hashtbl.t =
+  let tbl = Hashtbl.create 10 in
+  List.iter
+    (function
+      | Func ((i,t), _ , _) -> Hashtbl.add tbl i t
+      | _ -> ()
+    )
+    ast.definitions;
+  tbl
 
 
 (* ASTから依存関係を抽出 *)
-let ast_to_program : Syntax.ast -> program =
- fun ast ->
+let ast_to_program : Syntax.ast -> program = fun ast ->
   let input = List.map Syntax.name_of_cpunode ast.in_nodes in
   let output = List.map Syntax.name_of_cpunode ast.out_nodes in
   (* nodeのリストを構築 *)
@@ -118,7 +130,8 @@ let ast_to_program : Syntax.ast -> program =
     in
     IntSet.of_list single_list
   in
-  {id= ast.module_id; input; output; node; gnode; id_table; info_table; single_nodes;}
+  let func_table = construct_funtion_table ast in
+  {id= ast.module_id; input; output; node; gnode; id_table; info_table; single_nodes; func_table;}
 
 let print_program prog : unit =
   Printf.printf "Module : %s\n" prog.id ;

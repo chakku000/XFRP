@@ -162,7 +162,7 @@ let rec get_xfrp_expr_type (e : expr) (program : Module.program) : Type.t = (*{{
     | Eif (_,e1,e2) -> 
         let t1 = get_xfrp_expr_type e1 program in
         let t2 = get_xfrp_expr_type e2 program in
-        if t1 == t2 then t1
+        if t1 = t2 then t1
                     else raise (TypeError ("In If-expr, the value of then and else are not matched"))(*}}}*)
 
 (* XFRPの式 -> C言語のAST *)
@@ -299,12 +299,9 @@ let rec expr_to_clang_of_func (e : expr) (program : Module.program) : c_ast * c_
 let rec code_of_c_ast (ast : c_ast) (tabs : int) : string =(*{{{*)
   let tab = String.make tabs '\t' in
   match ast with
-  | Empty ->
-      ""
-  | Const s ->
-      s
-  | Variable v ->
-      v
+  | Empty -> ""
+  | Const s -> s
+  | Variable v -> v
   | VariableA (i, c) ->
       Printf.sprintf "%s[%s]" i (code_of_c_ast c 0)
   | VarDec (t, v) ->
