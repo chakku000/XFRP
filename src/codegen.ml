@@ -610,7 +610,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
   (* The set of gpu node, which are accessed by cpu node or cpu node array.  *)
   (* The gpu node in the set must move the value from the device to the host. *)
   let gpunodes_accessed_by_cpunode : IntSet.t =
-    let rec traverse_expr expr : IntSet.t = 
+    let rec traverse_expr expr : IntSet.t = (*{{{*)
       match expr with
       | EidA (sym, index_e) | EAnnotA (sym, _, index_e) -> 
           let id = Hashtbl.find prg.id_table sym in
@@ -628,7 +628,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
                               | NodeA (_,_,_,e,_) -> Some(traverse_expr e)
                               | _ -> None)
                     ast.definitions
-    |> List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty
+    |> List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty(*}}}*)
   in
   let variables = global_variable ast prg require_host_to_device_node in
   let functions = (* 関数定義 *)
@@ -659,7 +659,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     List.filter_map
       (function
         | GNode ((i, t), _, _, _, e) ->
-            Some (Gpu.generate_gpu_node_array_update i e ast prg)
+            Some (Gpu.generate_gpu_node_array_update i e ast prg gpunodes_accessed_by_cpunode)
         | _ ->
             None)
       ast.definitions

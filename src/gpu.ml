@@ -226,7 +226,10 @@ let generate_gnode_update_kernel (name : string) (gexpr : Syntax.gexpr) (ast : S
 
 (* Return the update function of gpu node array. *)
 (* For the gpu node array `x`, this function reaturns the function `x_update()`. *)
-let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) = 
+(* transfer_host_set : The set of gpu node which is required to transfer the data from device to host. *)
+let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) (transer_host_set : IntSet.t) :string = 
+  let gnodid = Hashtbl.find program.id_table name in
+  let info = Hashtbl.find program.info_table gnodid in
   (* Declaration of update function that is called from CPU. *)
   let declare = Printf.sprintf "void %s_update(){" name in
 
@@ -263,13 +266,11 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
   in
 
   (* Call Kernel Function *)
-  let call_kernel =
-    let required_thread_num =
-      let id = Hashtbl.find program.id_table name in
-      let info = Hashtbl.find program.info_table id in
-      info.number
+  let call_kernel : string =
+    let required_thread_num = info.number
     in
-    let arguments =
+    (* Construct the arguments of the kernel function *)
+    let arguments =(*{{{*)
       let arg_single_now = IntSet.fold
                             (fun id acc ->  let info = Hashtbl.find program.info_table id in
                                             let arg = Printf.sprintf "%s[turn]" info.name in
@@ -313,9 +314,18 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
                             ""
       in
       Utils.concat_without_empty ", " [arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
-    in
+    in(*}}}*)
     let dim_block = 512 in
     let dim_grid = (required_thread_num + 511) / 512 in
     Printf.sprintf "\t%s_kernel<<<%d,%d>>>(%s);" name dim_grid dim_block arguments
   in
-  Utils.concat_without_empty "\n" [kernel ; declare; call_kernel; "}"]
+  let transfer_to_host : string =
+    if IntSet.mem gnodid transer_host_set
+    then
+      let dst = Printf.sprintf "%s[turn]" name in
+      let src = Printf.sprintf "g_%s[turn]" name in
+      let size = Printf.sprintf "%d * sizeof(%s)" info.number (Type.of_string info.t) in
+      Printf.sprintf "\tcudaMemcpy(%s,%s,%s, cudaMemcpyDeviceToHost);" dst src size 
+    else ""
+  in
+  Utils.concat_without_empty "\n" [kernel ; declare; call_kernel; transfer_to_host; "}"]
