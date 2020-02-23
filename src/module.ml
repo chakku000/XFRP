@@ -35,10 +35,15 @@ type program =
     info_table : (int,node_t) Hashtbl.t;
 
     single_nodes : IntSet.t;
+    node_arrays : IntSet.t;
 
     (* A dictionary that save the type of function *)
     func_table : (string, Type.t) Hashtbl.t;
   }
+
+let default_functions = [
+  ("pow", Type.TFloat);
+]
 
 (* Node/Gnode(string)からID(int)への辞書を構築する関数 *)
 let construct_id_table (nodes : Syntax.id list) (gnodes : Syntax.id list) :
@@ -81,7 +86,7 @@ let construct_nodeinfo_table (ast : Syntax.ast)
     table
 
 (* This function returns the dictionary whose key is the name of function and the value of dictionary is the return type of function. *)
-let construct_funtion_table (ast : Syntax.ast) : (string,Type.t) Hashtbl.t =
+let construct_function_table (ast : Syntax.ast) : (string,Type.t) Hashtbl.t =
   let tbl = Hashtbl.create 10 in
   List.iter
     (function
@@ -89,6 +94,7 @@ let construct_funtion_table (ast : Syntax.ast) : (string,Type.t) Hashtbl.t =
       | _ -> ()
     )
     ast.definitions;
+  List.iter (fun (sym, t) -> Hashtbl.add tbl sym t) default_functions;
   tbl
 
 
@@ -130,8 +136,19 @@ let ast_to_program : Syntax.ast -> program = fun ast ->
     in
     IntSet.of_list single_list
   in
-  let func_table = construct_funtion_table ast in
-  {id= ast.module_id; input; output; node; gnode; id_table; info_table; single_nodes; func_table;}
+  let node_arrays = 
+    let arrays_list = List.filter_map
+      (fun symbol -> 
+        let id = Hashtbl.find id_table symbol in
+        let info = Hashtbl.find info_table id in
+        if info.number > 1 then Some(id)
+        else None)
+      node
+    in
+    IntSet.of_list arrays_list
+  in
+  let func_table = construct_function_table ast in
+  {id= ast.module_id; input; output; node; gnode; id_table; info_table; single_nodes; node_arrays; func_table;}
 
 let print_program prog : unit =
   Printf.printf "Module : %s\n" prog.id ;

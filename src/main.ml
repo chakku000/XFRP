@@ -35,7 +35,7 @@ let compile in_c : string =
     (* programはastからデータを構築.ここでデータは依存関係だったり... *)
     let program = Module.ast_to_program ast in
     (* debug *)
-    Module.show_id_table program;
+    (* Module.show_id_table program; *)
 
     (* C/C++のソースコード *)
     let code : string = Codegen.code_of_ast ast program !thread in

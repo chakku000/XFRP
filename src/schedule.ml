@@ -128,9 +128,9 @@ let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) arr
     let fsd_table = get_fsd_hashtbl ast prog in
 
     (* debug *)
-    Printf.eprintf "====== FSD =====\n";
-    Hashtbl.iter (fun id fsd -> Printf.eprintf "ID(%d) -> %d\n" id fsd) fsd_table;
-    Printf.eprintf "================\n";
+    (* Printf.eprintf "====== FSD =====\n"; *)
+    (* Hashtbl.iter (fun id fsd -> Printf.eprintf "ID(%d) -> %d\n" id fsd) fsd_table; *)
+    (* Printf.eprintf "================\n"; *)
     let max_dist = Hashtbl.fold (fun _ v acc -> max v acc) fsd_table 0 in
     let dist_array = Array.make (max_dist + 1) [] in
     Hashtbl.iter

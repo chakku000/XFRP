@@ -2,6 +2,7 @@
     open Syntax
     open Type
     exception UnknownTypeDeclaration of string
+    exception InvalidArraySize of string
 %}
 
 (* 予約後 *)
@@ -55,7 +56,7 @@ top :
 definition :
   | NODE 
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      i = ID n = option(AT num = INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) })
+      i = ID n = option(AT num = node_number WITH DEFAULT LPAREN c = constant RPAREN { (num,c) })
       COLON t = type_specific EQUAL e = expr
       {
         match n with
@@ -64,7 +65,7 @@ definition :
       }
   | GNODE (* gnode init[0] x@1024 : Int = ... *)
       init = option(INIT LBRACKET ie = init_expr RBRACKET {ie})
-      id = ID AT num = INT WITH DEFAULT LPAREN c = constant RPAREN
+      id = ID AT num = node_number WITH DEFAULT LPAREN c = constant RPAREN (* TODO : numをINT以外を取れるようにする *)
       COLON t = type_specific
         EQUAL ge = gexpr
       {
@@ -178,3 +179,22 @@ constant:
   | FALSE { CBool(false)}
   | INT   { CInt($1) }
   | FLOAT { CFloat($1) }
+
+
+node_number : 
+        | n = INT
+          {
+              n
+          } 
+        | n1 = node_number b = binop n2 = node_number
+          {
+            let ret = match b with
+              | BAdd-> n1 + n2
+              | BMinus -> n1 - n2
+              | BMul -> n1 * n2
+              | BDiv -> n1 / n2
+              | BMod -> n1 mod n2
+              | _ -> raise (InvalidArraySize "Definition of Array size is Invalid. Only +-*/% are available.")
+            in
+            ret
+          }

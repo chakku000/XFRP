@@ -4,6 +4,8 @@ open Type
 exception TypeError of string
 exception Unreachable of string
 
+module IntSet = Set.Make (Int)
+
 module String = struct
   include String
 
@@ -83,13 +85,15 @@ let macros = ["#define bool char"; "#define true 1"; "#define false 0"]
 let macro_code () = Utils.concat_without_empty "\n" macros(*}}}*)
 
 (* ノードの値を保存するグローバルな変数を定義 *)
-let global_variable (ast : Syntax.ast) (prg : Module.program) =(*{{{*)
+let global_variable (ast : Syntax.ast) (prg : Module.program) (nodearrays_accessed_from_gnode : IntSet.t) : string =(*{{{*)
   let turn_vairable = "char turn = 0;" in
   let cpunode_to_variable = function
     | Single (i, t) ->
         Printf.sprintf "%s %s[2];" (Type.of_string t) i
     | Array ((i, t), n, _) ->
-        Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n
+        let host : string = Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n in
+        let device : string = Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i in
+        host ^ "\n" ^  device
   in
   let input =
     List.map cpunode_to_variable ast.in_nodes |> String.concat "\n"
@@ -392,13 +396,11 @@ let generate_node_update_function (name : string) (expr : Syntax.expr) (program:
   Utils.concat_without_empty "\n" [declare; code1; Printf.sprintf "\t%s[turn] = %s ;" name code2; "}"]
 
 (* ノード配列の更新関数を生成する関数 *)
-let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) =(*{{{*)
+let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Module.program) (device_memory_require : IntSet.t) : string =(*{{{*)
   let declare = Printf.sprintf "void %s_update(int self){" name in
   let pre, post = expr_to_clang expr program in
   let code_pre = code_of_c_ast pre 1 in
-  let code_post =
-    Printf.sprintf "\t%s[turn][self] = %s;" name (code_of_c_ast post 1)
-  in
+  let code_post = Printf.sprintf "\t%s[turn][self] = %s;" name (code_of_c_ast post 1) in
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
 (* Return the update function of gpu node array. *)
@@ -479,8 +481,10 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
 (* loop関数を生成 *)
 (* 返り値 (max_fsd, assign_array2d) 
  *  max_fsd : FSDの最大値
- *  assign_array2d : FSDがiのときにスレッドjが更新する更新関数 *)
-let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) : int * string array array = 
+ *  assign_array2d : FSDがiのときにスレッドjが更新する更新関数
+ *  nodearray_accessed_by_gpunode : 
+ *)
+let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) (nodearray_accessed_by_gpunode : IntSet.t) : int * string array array = 
   (* scheduled : スケジューリングされたノード *)
   (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
   (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
@@ -511,7 +515,19 @@ let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (t
                  * It means that the cpu node array update is done by following code. *)
                 (* for(int i=0;i<N; i++) node_update(i); *)
                 let info = Hashtbl.find program.info_table nodeid in
-                Printf.sprintf "\tfor(int i=%d;i<%d;i++) %s_update(i);" startindex endindex info.name
+                let update_code = Printf.sprintf "\tfor(int i=%d;i<%d;i++) %s_update(i);" startindex endindex info.name in
+                let transfer_to_device_code = 
+                  if IntSet.mem nodeid nodearray_accessed_by_gpunode
+                  then
+                    let src = Printf.sprintf "%s[turn]" info.name in
+                    let dst = Printf.sprintf "g_%s[turn]" info.name in
+                    let size = Printf.sprintf "%d * sizeof(%s)" info.number (Type.of_string info.t) in
+                    Printf.sprintf "\tcudaMemcpy(%s, %s, %s, cudaMemcpyHostToDevice);" dst src size 
+                  else
+                    ""
+                in
+                let code = Utils.concat_without_empty "\n" [update_code; transfer_to_device_code] in
+                code
             | Schedule.GArray nodeid ->
                 (* Return the update method of gpu node corresponds to `nodeid`. *)
                 (* Returns the following code. *)
@@ -576,7 +592,29 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
   let header = header_code () in
   let header2 = header_code2 () in
   let macros = macro_code () in
-  let variables = global_variable ast prg in
+  let require_host_to_device_node =  (* The set of node array accessed from gpu node *)
+    let rec traverse_gexpr gexpr = 
+      match gexpr with
+      | GIdAt (sym, g) | GIdAtAnnot(sym,g,_) ->
+          let id = Hashtbl.find prg.id_table sym in
+          let set = if IntSet.mem id prg.node_arrays then IntSet.singleton id else IntSet.empty in
+          IntSet.union set (traverse_gexpr g)
+      | Gbin (_, g1,g2) -> 
+          IntSet.union (traverse_gexpr g1) (traverse_gexpr g2)
+      | GApp (_, args) -> 
+          List.fold_left (fun acc g -> IntSet.union acc (traverse_gexpr g)) IntSet.empty args
+      | Gif (cond1, cond2, cond3) ->
+          List.fold_left (fun acc g -> IntSet.union acc (traverse_gexpr g)) IntSet.empty [cond1; cond2; cond3]
+      | _ -> IntSet.empty
+    in
+    List.filter_map
+      (function
+        | GNode (_,_,_,_,g) -> Some(traverse_gexpr g)
+        | _ -> None)
+      ast.definitions
+    |>  List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty
+  in
+  let variables = global_variable ast prg require_host_to_device_node in
   let functions = (* 関数定義 *)
     List.filter_map
       (function
@@ -593,10 +631,10 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |> String.concat "\n\n"
   in
-  let node_array_update = (* Internal/Output配列ノードの更新関数を定義 *)
+  let node_array_update : string = (* Internal/Output配列ノードの更新関数を定義 *)
     List.filter_map
       (function
-        | NodeA ((i, t), _, _, e, _) -> Some (generate_nodearray_update i e prg)
+        | NodeA ((i, t), _, _, e, _) -> Some (generate_nodearray_update i e prg require_host_to_device_node)
         | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n\n"
@@ -629,7 +667,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
         |> String.concat "\n\n" in
   let main = main_code in
   let setup = setup_code ast prg thread in
-  let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread in
+  let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread require_host_to_device_node in
   let updates =
     Array.map (fun a -> Array.to_list a |> String.concat "\n") update_function_array |> Array.to_list |> String.concat "\n" in
   let loops = create_loop_function ast prg thread maxfsd |> Array.to_list |> Utils.concat_without_empty "\n"

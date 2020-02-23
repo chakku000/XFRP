@@ -216,11 +216,12 @@ let generate_kernel_head (name : string) (program : Module.program)
 let generate_gnode_update_kernel (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) (head: string) : string =
   let kernel_name = head in
   let self_index_expr = "\tint self = blockIdx.x * blockDim.x + threadIdx.x;" in
+  let self_restriction = Printf.sprintf "\tif(self < %d){" (let id = Hashtbl.find program.id_table name in let info = Hashtbl.find program.info_table id in info.number ) in
   let cuda_ast_pre, cuda_ast_post = Target.convert_from_gexpr_to_cudaAST gexpr program in
-  let cuda_code_pre = Target.convert_cudaAST_to_code cuda_ast_pre 1 in
+  let cuda_code_pre = Target.convert_cudaAST_to_code cuda_ast_pre 2 in
   let cuda_code_post = Target.convert_cudaAST_to_code cuda_ast_post 0 in
-  let cuda_code_post_assign = Printf.sprintf "\t%s[self] = %s;" name cuda_code_post in
-  Utils.concat_without_empty "\n" [kernel_name; self_index_expr; cuda_code_pre; cuda_code_post_assign ; "}"]
+  let cuda_code_post_assign = Printf.sprintf "\t\t%s[self] = %s;" name cuda_code_post in
+  Utils.concat_without_empty "\n" [kernel_name; self_index_expr; self_restriction; cuda_code_pre; cuda_code_post_assign ; "\t}"; "}"]
 
 
 (* Return the update function of gpu node array. *)
@@ -235,7 +236,7 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
   let single_now, single_last = single in
   let array_now, array_last = nodearray in
   let gnode_now, gnode_last = gnode in
-  (* Printf.eprintf "===== GNode %s =====\n"  name; *)
+  (* Printf.eprintf "===== GNode %s =====\n"  name; *)(*{{{*)
   (* Printf.eprintf "single(now) : "; *)
   (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  single_now; *)
   (* Printf.eprintf "\n"; *)
@@ -253,7 +254,7 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
   (* Printf.eprintf "\n"; *)
   (* Printf.eprintf "gnode(last) : "; *)
   (* IntSet.iter (fun i -> let info = Hashtbl.find program.info_table i in Printf.eprintf "%s, " info.name)  gnode_last; *)
-  (* Printf.eprintf "\n"; *)
+  (* Printf.eprintf "\n"; *)(*}}}*)
 
   (* Create Kernel Function *)
   let kernel = 
@@ -263,7 +264,7 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
 
   (* Call Kernel Function *)
   let call_kernel =
-    let kernel_size =
+    let required_thread_num =
       let id = Hashtbl.find program.id_table name in
       let info = Hashtbl.find program.info_table id in
       info.number
@@ -313,6 +314,8 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
       in
       Utils.concat_without_empty ", " [arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
     in
-    Printf.sprintf "\t%s_kernel<<<%d>>>(%s);" name kernel_size arguments
+    let dim_block = 512 in
+    let dim_grid = (required_thread_num + 511) / 512 in
+    Printf.sprintf "\t%s_kernel<<<%d,%d>>>(%s);" name dim_grid dim_block arguments
   in
   Utils.concat_without_empty "\n" [kernel ; declare; call_kernel; "}"]
