@@ -78,7 +78,7 @@ type expr =
   | ESelf
   | EConst of const
   | Eid of id
-  | EidA of id * expr
+  | EidA of id * expr (* Node Array or GPU Node *)
   | EAnnot of id * annot
   | EAnnotA of id * annot * expr
   | Ebin of binop * expr * expr

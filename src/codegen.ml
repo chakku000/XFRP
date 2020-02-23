@@ -614,6 +614,29 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |>  List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty
   in
+  (* The set of gpu node, which are accessed by cpu node or cpu node array.  *)
+  (* The gpu node in the set must move the value from the device to the host. *)
+  let gpunodes_accessed_by_cpunode : IntSet.t =
+    let rec traverse_expr expr : IntSet.t = 
+      match expr with
+      | EidA (sym, index_e) | EAnnotA (sym, _, index_e) -> 
+          let id = Hashtbl.find prg.id_table sym in
+          let set1 = if List.mem sym prg.gnode then IntSet.singleton id else IntSet.empty in
+          IntSet.union set1 (traverse_expr index_e)
+      | Ebin(_, e1, e2) ->
+          IntSet.union (traverse_expr e1) (traverse_expr e2)
+      | EApp(_, args) -> 
+          List.fold_left (fun acc e -> IntSet.union acc (traverse_expr e)) IntSet.empty args
+      | Eif(e1,e2,e3) -> 
+          List.fold_left (fun acc e -> IntSet.union acc (traverse_expr e) ) IntSet.empty [e1; e2; e3]
+      | _ -> IntSet.empty
+    in
+    List.filter_map (function | Node (_, _, e) -> Some(traverse_expr e)
+                              | NodeA (_,_,_,e,_) -> Some(traverse_expr e)
+                              | _ -> None)
+                    ast.definitions
+    |> List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty
+  in
   let variables = global_variable ast prg require_host_to_device_node in
   let functions = (* 関数定義 *)
     List.filter_map
