@@ -403,12 +403,6 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
   let code_post = Printf.sprintf "\t%s[turn][self] = %s;" name (code_of_c_ast post 1) in
   Utils.concat_without_empty "\n" [declare; code_pre; code_post; "}"](*}}}*)
 
-(* Return the update function of gpu node array. *)
-(* For the gpu node array `x`, this function reaturns the function `x_update()`. *)
-(* let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast : Syntax.ast) (program : Module.program) = *) 
-(*   let kernel_function = Gpu.generate_gnode_update_kernel name gexpr ast program in *)
-(*   let declare = Printf.sprintf "void %s_update(){" name in *)
-(*   Utils.concat_without_empty "\n" [kernel_function; "\n"; declare; "}"] *)
 
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
 let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
@@ -484,7 +478,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
  *  assign_array2d : FSDがiのときにスレッドjが更新する更新関数
  *  nodearray_accessed_by_gpunode : 
  *)
-let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) (nodearray_accessed_by_gpunode : IntSet.t) : int * string array array = 
+let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (thread : int) (nodearray_accessed_by_gpunode : IntSet.t) : int * string array array = (*{{{*)
   (* scheduled : スケジューリングされたノード *)
   (* scheduled.(i) :=  FSDがiのときの各スレッドが担当するノードの集合 *)
   (* scheduled.(i).(j) := FSDがiのときにスレッドjが更新するノードのリスト *)
@@ -555,8 +549,7 @@ let create_update_th_fsd_function (ast : Syntax.ast) (program:Module.program) (t
   (*   ) a; *)
   (* ) update_functions; *)
   (* Printf.printf "-----------\n"; *)(*}}}*)
-  (* return *)
-  (max_fsd, update_functions)
+  (max_fsd, update_functions)(*}}}*)
 
 (* loop,loop1,...関数を生成する *)
 let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
@@ -662,15 +655,6 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |> Utils.concat_without_empty "\n\n"
   in
-  (* let gpu_kernel : string = *) 
-  (*   List.filter_map *)
-  (*     (function *)
-  (*       | GNode ((i,t), _, _, _, e) -> *) 
-  (*           Some(Gpu.generate_gnode_update_kernel i e ast prg) *)
-  (*       | _ -> None) *)
-  (*     ast.definitions *)
-  (*   |>  Utils.concat_without_empty "\n" *)
-  (* in *)
   let gnode_update = (* GPUノードの更新関数を定義 *)
     List.filter_map
       (function
@@ -702,7 +686,6 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     ; macros
     ; variables
     ; functions
-    (* ; gpu_kernel *)
     ; input_node_update_functions
     ; node_update
     ; node_array_update
