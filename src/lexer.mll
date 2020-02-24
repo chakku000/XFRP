@@ -30,11 +30,15 @@ rule read = parse
   | "!="              { NEQ }
   | "=="              { EQUAL2 }
   | '='               { EQUAL }
+  | '&'               { AND }
+  | '|'               { OR }
   | '+'               { PLUS }
   | '-'               { MINUS }
   | '%'               { PERCENT }
   | '*'               { ASTERISK }
   | '/'               { SLASH }
+  | "<<"              { LSHIFT }
+  | ">>"              { RSHIFT }
   | ">="              { RTE }
   | "<="              { LTE }
   | '>'               { RT }

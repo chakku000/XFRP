@@ -12,7 +12,7 @@
 (* 記号 *)
 %token COMMA COLON (* AT SEMICOLON *)
 (* 演算 *)
-%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 NEQ LT RT LTE RTE (* OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
+%token EQUAL PLUS MINUS PERCENT SLASH ASTERISK EQUAL2 NEQ LT RT LTE RTE AND OR LSHIFT RSHIFT (* OR LTE LT RTE RT(1* XOR AND LOR LAND NEQ LSHIFT RSHIFT *1) *)
 (* 識別子 *)
 %token <string> ID
 (* 数値 *)
@@ -26,9 +26,11 @@
 
 (* 下のほうが優先順位が高い *)
 %right prec_if
-(* %left  OR *)
+%left  OR
+%left  AND
 %left  EQUAL2 NEQ
 %left  LTE LT RTE RT
+%left  LSHIFT RSHIFT
 %left  PLUS MINUS
 %left  ASTERISK SLASH PERCENT
 %right prec_uni
@@ -103,6 +105,8 @@ gexpr :
   | id = ID AT a = annotation { GAnnot(id,a) }
   | id = ID LBRACKET index = gexpr RBRACKET { GIdAt(id,index) }
   | id = ID LBRACKET index = gexpr RBRACKET AT a = annotation { GIdAtAnnot(id,index,a) }
+  (* Function Call *)
+  | id = ID LPAREN args = separated_list(COMMA,gexpr) RPAREN { GApp(id,args) }
   | gexpr binop gexpr   { Gbin($2,$1,$3) }
   | LPAREN gexpr RPAREN  { $2 }
   | IF cond = gexpr THEN e1 = gexpr ELSE e2 = gexpr %prec prec_if { Gif(cond,e1,e2) }
@@ -157,17 +161,21 @@ output_definition:
 (* -------------- Operator ---------------- *)
 %inline
 binop:
-  | PLUS    { BAdd }
-  | MINUS   { BMinus }
-  | ASTERISK{ BMul }
-  | SLASH   { BDiv }
-  | PERCENT { BMod }
-  | NEQ     { BNeq }
-  | EQUAL2  { BEq }
-  | RTE     { BRte }
-  | RT      { BRt }
-  | LTE     { BLte }
-  | LT      { BLt }
+        | AND     { BAnd }
+        | OR      { BOr }
+        | LSHIFT  { BLshift }
+        | RSHIFT  { BRshift } 
+        | PLUS    { BAdd }
+        | MINUS   { BMinus }
+        | ASTERISK{ BMul }
+        | SLASH   { BDiv }
+        | PERCENT { BMod }
+        | NEQ     { BNeq }
+        | EQUAL2  { BEq }
+        | RTE     { BRte }
+        | RT      { BRt }
+        | LTE     { BLte }
+        | LT      { BLt }
 
 
 annotation:

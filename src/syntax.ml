@@ -43,6 +43,7 @@ let type_of_const = function
     | CFloat _ -> Type.TFloat
 
 type binop =
+  | BAnd
   | BAdd
   | BMinus
   | BMul
@@ -55,8 +56,12 @@ type binop =
   | BLt
   | BRte
   | BRt
+  | BLshift
+  | BRshift
 
 let string_of_binop : binop -> string = function
+  | BAnd -> "&"
+  | BOr -> "|"
   | BAdd -> "+"
   | BMinus -> "-"
   | BMul -> "*"
@@ -64,11 +69,12 @@ let string_of_binop : binop -> string = function
   | BMod -> "%"
   | BEq -> "=="
   | BNeq -> "!="
-  | BOr -> "||"
   | BLte -> "<="
   | BLt -> "<"
   | BRte -> ">="
   | BRt -> ">"
+  | BLshift -> "<<"
+  | BRshift -> ">>"
 
 type uniop = UNeg
 
