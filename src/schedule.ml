@@ -19,7 +19,7 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
   let ptbl = Hashtbl.create 128 in
 
   (* Add input node to `ptbl` *)
-  List.iter (fun inode -> Hashtbl.add ptbl (Hashtbl.find program.id_table inode) IntSet.empty) program.input;
+  (* List.iter (fun inode -> Hashtbl.add ptbl (Hashtbl.find program.id_table inode) IntSet.empty) program.input; *)
 
   (* The function that collects the set of id. *)
   let rec collect_nodeid expr =
@@ -27,11 +27,17 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
     | ESelf | EConst _ | EAnnot _ | EAnnotA _ ->
         IntSet.empty
     | Eid i ->
-        Hashtbl.find program.id_table i |> IntSet.singleton
+        if List.mem i program.input
+          then IntSet.empty
+          else Hashtbl.find program.id_table i |> IntSet.singleton
     | EidA (i, e) ->
-        let id1 = Hashtbl.find program.id_table i in
         let index_set = collect_nodeid e in
-        IntSet.add id1 index_set
+        let set1 =
+          if List.mem i program.input
+            then IntSet.empty
+            else let id1 = Hashtbl.find program.id_table i in IntSet.singleton id1
+        in
+        IntSet.union set1 index_set
     | Ebin (_, e1, e2) ->
         IntSet.union (collect_nodeid e1) (collect_nodeid e2)
     | EUni (_, e) ->
@@ -63,7 +69,6 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
     | Gif (ge_if, ge_then, ge_else) -> IntSet.union (collect_gnodeid ge_if) (IntSet.union (collect_gnodeid ge_then) (collect_gnodeid ge_else))
   in
 
-  (* TODO GPUノードの解析が未実装 *)
   (* ptbl(親ノードの隣接リスト)を構築 *)
   List.iter
     (function
@@ -103,7 +108,7 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
 (* Calculate FSD of each node. *)
 (* returns the Hashtable whose key is the value of node_id and vwhose value is  *)
 let get_fsd_hashtbl(ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t = 
-    let graph = construct_graph ast prog in
+    let graph : (int, IntSet.t) Hashtbl.t = construct_graph ast prog in
     let fsd = Hashtbl.create 128 in
     let rec dfs (cur : int) : int =
         if (Hashtbl.mem fsd cur) then (Hashtbl.find fsd cur)
@@ -120,17 +125,13 @@ let get_fsd_hashtbl(ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtb
     Hashtbl.iter (fun k _ -> let fsdval = dfs k in Hashtbl.replace fsd k fsdval) graph;
     fsd
 
-(* 各距離のノードを集約する関数 *)
-(* 返り値retにたいしてret[d]でFSDがdのノードの集合 *)
+(* This function collects the node whose fsd values are same. *)
+(* The return value `a` is a array. And, the `a[i]` is the list of node whose fsd value is `i` *)
 let collect_same_fsd (ast : Syntax.ast) (prog : Module.program) : (int list) array = 
     (* Hashtbl that contains the fsd of each node. *)
     (* The key of tbl is the node of id, and the value is the fsd of the node *)
     let fsd_table = get_fsd_hashtbl ast prog in
 
-    (* debug *)
-    (* Printf.eprintf "====== FSD =====\n"; *)
-    (* Hashtbl.iter (fun id fsd -> Printf.eprintf "ID(%d) -> %d\n" id fsd) fsd_table; *)
-    (* Printf.eprintf "================\n"; *)
     let max_dist = Hashtbl.fold (fun _ v acc -> max v acc) fsd_table 0 in
     let dist_array = Array.make (max_dist + 1) [] in
     Hashtbl.iter
@@ -224,27 +225,12 @@ let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module
     (* どのノードをどのCPUコアが更新するかを決定する *)
 let assign_to_cpu (ast : Syntax.ast) (program: Module.program) (thread : int) : (int * ((assign_node list) array)) array =
   let dist_array = collect_same_fsd ast program in (* dist_array[i] : FSDがiのノードの集合 *)
-  (* TODO undo debug *)
-  (* let max_distance = Array.length dist_array -1 in *)
-  (* Array.iteri *) 
-  (*       (fun i lst -> *) 
-  (*         let assigned = schedule_fsd i lst thread program in *) 
-  (*         Array.iteri (1* 出力 *1) *) 
-  (*               (fun id lst -> *) 
-  (*                 Printf.printf "core%d : " id; *) 
-  (*                   List.iter (function *) 
-  (*                     | Single id -> Printf.printf "%d," id *) 
-  (*                     | Array (id,(s,t)) -> Printf.printf "%d(%d,%d)," id s t) *) 
-  (*                   lst; *) 
-  (*                   Printf.printf "\n" *) 
-  (*               ) assigned) *) 
-  (*       dist_array; *)
 
   (* (FSDの値, 各CPUコアが担当するノードのリストの配列)を返す *)
   Array.mapi
-    (fun i (* fsd *) node_list (* fsdに相当するノードのリスト *) ->
+    (fun fsd node_list (* fsdに相当するノードのリスト *) ->
       (* assigned[th]: スレッドthがFSD=iで担当するノードの配列*)
-      let assigned : (assign_node list) array = schedule_fsd i node_list thread program in
+      let assigned : (assign_node list) array = schedule_fsd fsd node_list thread program in
   (* (FSD,各コアのFSD(i)で担当するノードのリスト)のtuple*)
-      (i, assigned)
+      (fsd, assigned)
     ) dist_array

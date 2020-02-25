@@ -81,7 +81,7 @@ let header_code () =
   List.map (fun s -> "#include<" ^ s ^ ">") header_list |> String.concat "\n"
 let header_code2 () =
   List.map (fun s -> Printf.sprintf "#include \"%s\"" s) header_list2 |> Utils.concat_without_empty "\n"
-let macros = ["#define bool char"; "#define true 1"; "#define false 0"]
+let macros = ["#define bool int"; "#define true 1"; "#define false 0"]
 let macro_code () = Utils.concat_without_empty "\n" macros(*}}}*)
 
 (* ノードの値を保存するグローバルな変数を定義 *)
@@ -570,14 +570,43 @@ let create_loop_function (ast : Syntax.ast) (program : Module.program)(*{{{*)
       String.concat concat_delm
     in
     let tail = 
-      if thread = 1 then "\n\tturn^=1;\n}" 
-                    else Printf.sprintf "\n\tsynchronization(%d);\n%s}" i (if i==0 then "\tturn^=1;\n" else "")
+      if thread = 1 then "\n}" 
+                    else Printf.sprintf "\n\tsynchronization(%d);\n}" i
     in
     loop_functions.(i) <- head ^ body ^ tail
   done;
   loop_functions(*}}}*)
 
-let main_code = "int main()\n{\n  setup();\n  loop();\n}"
+let main_code (program : Module.program) = 
+  let input_args = 
+    List.map
+      (fun inode ->
+        let id = Hashtbl.find program.id_table inode in
+        let info = Hashtbl.find program.info_table id in
+        if info.number = 1 then Printf.sprintf "&%s[turn]" info.name (* Single Node *)
+                           else Printf.sprintf "%s[turn]" info.name (* Node Array *)
+      ) program.input
+    |> Utils.concat_without_empty ","
+  in
+  let output_args = 
+    List.map
+    (fun onode -> 
+      let id = Hashtbl.find program.id_table onode in
+      let info = Hashtbl.find program.info_table id in
+      if info.number = 1 then Printf.sprintf "%s[turn]" info.name
+                         else Printf.sprintf "%s[turn]" info.name
+    ) program.output
+            |> Utils.concat_without_empty ","
+  in
+  "int main(){" ^ "\n" ^
+    "\tsetup();" ^ "\n" ^
+    "\twhile(1){" ^ "\n" ^
+      (Printf.sprintf "\t\tinput(%s);" input_args )^ "\n" ^
+      "\t\tloop();" ^ "\n" ^
+      (Printf.sprintf "\t\toutput(%s);" output_args ) ^ "\n" ^
+      "\t\tturn^=1;" ^ "\n" ^
+    "\t}" ^ "\n" ^
+  "}"
 
 (* 全体のC言語のコードを文字列として出力する *)
 (* 外部からはこの関数を呼べばいい *)
@@ -665,13 +694,6 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |> String.concat "\n\n"
   in
-  let input_node_update_functions =
-    List.map
-      (function
-        | Single (i,_) -> Printf.sprintf "void %s_update(){\n\t%s[turn]=definition_of_%s();\n}" i i i
-        | Array ((i,t),num,_) -> Printf.sprintf "void %s_update(int self){\n\t%s[turn][self] = definition_of_%s(self);\n}" i i i)
-      ast.in_nodes
-        |> String.concat "\n\n" in
   let main = main_code in
   let setup = setup_code ast prg thread in
   let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread require_host_to_device_node in
@@ -686,12 +708,11 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     ; macros
     ; variables
     ; functions
-    ; input_node_update_functions
     ; node_update
     ; node_array_update
     ; gnode_update
     ; updates 
     ; loops
     ; setup
-    ; main ]
+    ; main prg ]
   |> Utils.concat_without_empty "\n\n"(*}}}*)
