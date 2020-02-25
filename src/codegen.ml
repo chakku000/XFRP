@@ -405,6 +405,8 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
 
 
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
+(* TODO GPUからアクセスされるノード配列の初期化 *)
+(* TODO ノードからアクセスされるGPUノードの初期化 *)
 let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
   (* GNodeの初期化 *)
   let init_gnode =
