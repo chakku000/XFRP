@@ -75,7 +75,7 @@ let rec string_of_c_ast (ast : c_ast) : string =(*{{{*)
       List.map string_of_c_ast codes |> String.concat " :: "(*}}}*)
 
 (* Header周り *)
-let header_list = ["stdio.h"; "stdlib.h"](*{{{*)
+let header_list = ["stdio.h"; "stdlib.h"; "cuda_runtime.h" ; "helper_functions.h"; "helper_cuda.h"](*{{{*)
 let header_list2 = ["setting.h"]
 let header_code () =
   List.map (fun s -> "#include<" ^ s ^ ">") header_list |> String.concat "\n"

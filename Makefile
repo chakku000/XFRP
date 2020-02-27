@@ -11,7 +11,7 @@
 
 .PHONY: 	all clean byte native profile debug sanity test format
 
-OCB_FLAGS   = -use-ocamlfind -use-menhir -I src -I src/codegen -I src/codegen_p -I lib -pkg ppx_deriving.show # uses menhir
+OCB_FLAGS   = -use-ocamlfind -use-menhir -I src -I src/codegen -I src/codegen_p -I lib
 OCB = ocamlbuild $(OCB_FLAGS)
 
 all: native byte # profile debug

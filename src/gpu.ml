@@ -207,7 +207,12 @@ let generate_kernel_head (name : string) (program : Module.program)
       arg_gnode_last
       ""
   in
-  let args = Utils.concat_without_empty ", " [types_single_now; types_single_last; types_array_now; types_array_last; types_gnode_now; types_gnode_last]
+  let self_arg =
+    let node_id = Hashtbl.find program.id_table name in
+    let info = Hashtbl.find program.info_table node_id in 
+    Printf.sprintf "%s* %s" (Type.of_string info.t) name
+  in
+  let args = Utils.concat_without_empty ", " [self_arg;types_single_now; types_single_last; types_array_now; types_array_last; types_gnode_now; types_gnode_last]
   in
   Printf.sprintf "__global__ void %s_kernel(%s){" name args
 
@@ -313,11 +318,13 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
                             gnode_last
                             ""
       in
-      Utils.concat_without_empty ", " [arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
+      let self_arg = Printf.sprintf "%s[turn]" name
+      in
+      Utils.concat_without_empty ", " [self_arg; arg_single_now; arg_single_last; arg_array_now; arg_array_last; arg_gnode_now; arg_gnode_last]
     in(*}}}*)
-    let dim_block = 512 in
-    let dim_grid = (required_thread_num + 511) / 512 in
-    Printf.sprintf "\t%s_kernel<<<%d,%d>>>(%s);" name dim_grid dim_block arguments
+    let dim_block = "dim3(512)" in
+    let dim_grid = "dim3(" ^ (string_of_int ((required_thread_num + 511) / 512)) ^ ")" in
+    Printf.sprintf "\t%s_kernel<<<%s,%s>>>(%s);" name dim_grid dim_block arguments
   in
   let transfer_to_host : string =
     if IntSet.mem gnodid transer_host_set
