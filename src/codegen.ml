@@ -407,40 +407,36 @@ let generate_nodearray_update (name : string) (expr : Syntax.expr) (program : Mo
 (* 各ノードの初期化をするC言語のコードを出力する関数 *)
 (* TODO GPUからアクセスされるノード配列の初期化 *)
 (* TODO ノードからアクセスされるGPUノードの初期化 *)
-let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string =(*{{{*)
-  (* GNodeの初期化 *)
+let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) (host_to_device : IntSet.t) (device_to_host : IntSet.t) : string =(*{{{*)
+  (* Initialize GNode *)
   let init_gnode =
     List.filter_map
       (function
         | GNode ((i, t), n, init, _, _) ->
+            let comment = Printf.sprintf "\t/* GPU %s */" i in
             let malloc =
-              Printf.sprintf
-                "\tfor(int i=0;i<2;i++) \
-                 cudaMalloc((void**)&g_%s[i],%d*sizeof(%s));"
-                i n (Type.of_string t)
+              Printf.sprintf "\tfor(int i=0;i<2;i++) cudaMalloc((void**)&g_%s[i],%d*sizeof(%s));" i n (Type.of_string t)
             in
-            if Option.is_none init then Some malloc
-            else
-              let tmp = get_unique_name () in
-              let preast, curast = expr_to_clang (Option.get init) prg in
-              let precode = code_of_c_ast preast 1 in
-              let curcode =
-                "\tint " ^ tmp ^ " = " ^ code_of_c_ast curast 1 ^ ";"
-              in
-              let ini_code =
-                Printf.sprintf "\tcudaMemSet(%s[1],%s,sizeof(%s)*%d)" i tmp
-                  (Type.of_string t) n
-              in
-              Some
-                ( malloc ^ "\n" ^ precode
-                ^ (if precode = "" then "" else "\n")
-                ^ curcode ^ "\n" ^ ini_code )
-        | _ ->
-            None)
+            let initialize = 
+              if Option.is_none init
+                then ""
+                else
+                  let tmp = get_unique_name () in
+                  let preast, curast = expr_to_clang (Option.get init) prg in
+                  let precode = code_of_c_ast preast 1 in
+                  let curcode = "\tint " ^ tmp ^ " = " ^ code_of_c_ast curast 0 ^ ";" in
+                  let ini_code =
+                    Printf.sprintf "\tcudaMemSet(%s[1],%s,sizeof(%s)*%d)" i tmp
+                      (Type.of_string t) n
+                  in
+                  Utils.concat_without_empty "\n" [precode ; curcode ; ini_code]
+            in
+            Some (Utils.concat_without_empty "\n" [ "\t"; comment; malloc; initialize;])
+        | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n"
   in
-  (* CPUノードの初期化を行うコードを出力 *)
+  (* Initialize CPU Node *)
   let init_node =
     List.filter_map
       (function
@@ -450,16 +446,36 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
             let curcode = code_of_c_ast curast 1 in
             Some (Utils.concat_without_empty "\n" [precode; "\t"^i^"[1]="^curcode^";"])
         | NodeA((i,t),num, Some(init), _, _) -> 
+            let comment = Printf.sprintf "\t/* %s */" i in
             let pre_ast, cur_ast = expr_to_clang init prg in
             let pre_code = code_of_c_ast pre_ast 1 in
             let cur_code = code_of_c_ast cur_ast 1 in
             let assign_code = Printf.sprintf "\t\t%s[1][self] = %s;" i cur_code in
             let code = Utils.concat_without_empty "\n" [pre_code; assign_code] in
             let for_stub = Printf.sprintf "\tfor(int self=0;self<%d;self++){\n%s\n\t}" num code in
-            Some(for_stub)
+            let gpu_memory : string = 
+              let id = Hashtbl.find prg.id_table i in
+              if IntSet.mem id host_to_device
+                then "\t" ^ (Printf.sprintf "for(int i=0;i<2;i++) cudaMalloc((void**)&g_%s[i],%d * sizeof(%s));" i num (Type.of_string t))
+                else ""
+            in
+            Some(Utils.concat_without_empty "\n" [comment; for_stub; gpu_memory;])
         | _ -> None)
       ast.definitions
     |> Utils.concat_without_empty "\n"
+  in
+
+  (* TODO Initialize Input Node *)
+  let input_node_initialize = 
+    List.filter_map
+    (fun nodesym -> 
+      let node_id = Hashtbl.find prg.id_table nodesym in
+      let info = Hashtbl.find prg.info_table node_id in
+      if (info.number > 1 && IntSet.mem node_id host_to_device)
+        then Some ( "\t// Input " ^ nodesym ^ "\n" ^ (Printf.sprintf "\tfor(int i=0;i<2;i++) cudaMalloc((void*)&g_%s[i],%d*sizeof(%s));" nodesym info.number (Type.of_string info.t)))
+        else None
+    ) prg.input
+        |> Utils.concat_without_empty "\n"
   in
   (* スレッドが2以上のときにスレッドをforkするコード *)
   let thread_fork = 
@@ -472,7 +488,7 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) : string
     else Printf.sprintf "\tinit_barrier(%d);" thread
   in
   (* コードの結合 *)
-  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;"; init_node; init_gnode; init_sync; thread_fork; "}"] (*}}}*)
+  Utils.concat_without_empty "\n" ["void setup(){"; "\tturn=0;";input_node_initialize; init_node; init_gnode;  init_sync; thread_fork; "}"] (*}}}*)
 
 (* loop関数を生成 *)
 (* 返り値 (max_fsd, assign_array2d) 
@@ -604,11 +620,34 @@ let main_code (program : Module.program) =
     "\tsetup();" ^ "\n" ^
     "\twhile(1){" ^ "\n" ^
       (Printf.sprintf "\t\tinput(%s);" input_args )^ "\n" ^
+      "\t\tinput_support();\n" ^
       "\t\tloop();" ^ "\n" ^
       (Printf.sprintf "\t\toutput(%s);" output_args ) ^ "\n" ^
       "\t\tturn^=1;" ^ "\n" ^
     "\t}" ^ "\n" ^
   "}"
+
+(* This function generates `input_support()` function. *)
+(* `input_support()` function copy the values of input node arrays from host to device. *)
+let generate_input_support (program : Module.program) (host_to_device : IntSet.t) : string = 
+  let cuda_memcpy node_id = 
+    let info = Hashtbl.find program.info_table node_id in
+    let dst = Printf.sprintf "g_%s[turn]" info.name in
+    let src = Printf.sprintf "%s[turn]" info.name in
+    let size = Printf.sprintf "%d * sizeof(%s)" info.number (Type.of_string info.t) in
+    Printf.sprintf "\tcudaMemcpy(%s, %s, %s, cudaMemcpyHostToDevice);" dst src size 
+  in
+  let copies = 
+    List.filter_map
+      (fun node ->
+        let id = Hashtbl.find program.id_table node in
+        if (IntSet.mem id host_to_device)
+          then Some(cuda_memcpy id)
+          else None)
+      program.input
+    |> Utils.concat_without_empty "\n"
+  in
+  Utils.concat_without_empty "\n" ["void input_support(){"; copies; "}";]
 
 (* 全体のC言語のコードを文字列として出力する *)
 (* 外部からはこの関数を呼べばいい *)
@@ -617,7 +656,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
   let header2 = header_code2 () in
   let macros = macro_code () in
   let require_host_to_device_node =  (* The set of node array accessed from gpu node *)
-    let rec traverse_gexpr gexpr = 
+    let rec traverse_gexpr gexpr = (*{{{*)
       match gexpr with
       | GIdAt (sym, g) | GIdAtAnnot(sym,g,_) ->
           let id = Hashtbl.find prg.id_table sym in
@@ -636,7 +675,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
         | GNode (_,_,_,_,g) -> Some(traverse_gexpr g)
         | _ -> None)
       ast.definitions
-    |>  List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty
+    |>  List.fold_left (fun set acc -> IntSet.union set acc) IntSet.empty(*}}}*)
   in
   (* The set of gpu node, which are accessed by cpu node or cpu node array.  *)
   (* The gpu node in the set must move the value from the device to the host. *)
@@ -696,6 +735,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
       ast.definitions
     |> String.concat "\n\n"
   in
+  let input_support = generate_input_support prg require_host_to_device_node in
   let main = main_code in
   let setup = setup_code ast prg thread in
   let maxfsd, update_function_array = create_update_th_fsd_function ast prg thread require_host_to_device_node in
@@ -715,6 +755,7 @@ let code_of_ast (ast:Syntax.ast) (prg:Module.program) (thread:int) : string =(*{
     ; gnode_update
     ; updates 
     ; loops
-    ; setup
+    ; input_support
+    ; setup require_host_to_device_node gpunodes_accessed_by_cpunode
     ; main prg ]
   |> Utils.concat_without_empty "\n\n"(*}}}*)

@@ -1,4 +1,3 @@
-open Batteries
 open Syntax
 module IntSet = Set.Make (Int)
 
@@ -193,7 +192,7 @@ let schedule_fsd (fsd : int) (nodes : int list) (thread : int) (program : Module
                   cores.(coreid) <- cores.(coreid) @ [Array(nodeid,(sid,eid))];
                     (* 次のCPUコアが開始する添字を更新 *)
                     start_node_id := eid)
-                (List.init thread identity); (* [0,thread)のリスト *)
+                (List.init thread (fun id -> id)); (* [0,thread)のリスト *)
             start_core_index := re mod thread
         ) arrays;
 
