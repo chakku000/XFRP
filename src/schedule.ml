@@ -54,12 +54,16 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
     | GSelf -> IntSet.empty
     | GConst _ -> IntSet.empty
     (* CPUノード *)
-    | Gid nodename -> Hashtbl.find program.id_table nodename|> IntSet.singleton
+    | Gid nodename ->
+        if List.mem nodename program.input then IntSet.empty
+        else Hashtbl.find program.id_table nodename|> IntSet.singleton
     (* CPUノード+@last *)
     | GAnnot _ -> IntSet.empty
     (* ノード配列に対する参照 *)
     | GIdAt (nodesymbol, ge_index) -> 
-        let id = Hashtbl.find program.id_table nodesymbol |> IntSet.singleton in
+        let id =
+          if (List.mem nodesymbol program.input) then IntSet.empty
+            else Hashtbl.find program.id_table nodesymbol |> IntSet.singleton in
         let index_set = collect_gnodeid ge_index in
         IntSet.union id index_set
     | GIdAtAnnot _ -> IntSet.empty
@@ -108,6 +112,14 @@ let construct_graph (ast : Syntax.ast) (program : Module.program) : (int,IntSet.
 (* returns the Hashtable whose key is the value of node_id and vwhose value is  *)
 let get_fsd_hashtbl(ast : Syntax.ast) (prog : Module.program) : (int,int) Hashtbl.t = 
     let graph : (int, IntSet.t) Hashtbl.t = construct_graph ast prog in
+    (* Hashtbl.iter (fun k set -> *)
+    (*   let key_info = Hashtbl.find prog.info_table k in *)
+    (*   Printf.eprintf "%s : " key_info.name; *)
+    (*   IntSet.iter (fun nodeid -> *)
+    (*     let info = Hashtbl.find prog.info_table nodeid in *)
+    (*     Printf.eprintf "%s, " info.name) set; *)
+    (*   Printf.eprintf "\n") graph; *)
+
     let fsd = Hashtbl.create 128 in
     let rec dfs (cur : int) : int =
         if (Hashtbl.mem fsd cur) then (Hashtbl.find fsd cur)
