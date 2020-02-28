@@ -10,10 +10,10 @@ gnode red_rg@1228800 with default(0.5) : Float = pow(red[self] / 255.0, 2.2)
 gnode green_rg@1228800 with default(0.5) : Float = pow(green[self] / 255.0 , 2.2)
 gnode blue_rg@1228800 with default(0.5) : Float  = pow(blue[self] / 255.0 , 2.2)
 
-gnode grayscale_rg@1128800 with default(0.5) : Float = 0.2126 * red_rg[self] +
-                                              0.7152 * green_rg[self] + 
-                                              0.0722 * blue_rg[self]
+gnode grayscale_rg@1228800 with default(0.5) : Float = 0.2126 * red_rg[self] +
+						      0.7152 * green_rg[self] + 
+						      0.0722 * blue_rg[self]
 
-gnode grayscale@11228800 with default(0.5) : Float = pow(grayscale_rg[self], 2.2) 
+gnode grayscale@1228800 with default(0.5) : Float = pow(grayscale_rg[self], 1.0/2.2) 
 
-node grayImage@11228800 with default(0.5) : Float = grayscale[self]
+node grayImage@1228800 with default(0.5) : Float = grayscale[self]

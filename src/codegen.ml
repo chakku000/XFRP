@@ -620,6 +620,7 @@ let main_code (program : Module.program) =
   in
   "int main(){" ^ "\n" ^
     "\tsetup();" ^ "\n" ^
+    "\tuser_setup();" ^ "\n" ^
     "\twhile(1){" ^ "\n" ^
       (Printf.sprintf "\t\tinput(%s);" input_args )^ "\n" ^
       "\t\tinput_support();\n" ^
