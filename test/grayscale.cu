@@ -10,17 +10,25 @@
 #define true 1
 #define false 0
 
-char turn = 0;
+int turn = 0;
 int image[2][1228800];
 int* g_image[2];
 float grayImage[2][11228800];
+int red[2][1228800];
 int* g_red[2];
+int green[2][1228800];
 int* g_green[2];
+int blue[2][1228800];
 int* g_blue[2];
+float red_rg[2][1228800];
 float* g_red_rg[2];
+float green_rg[2][1228800];
 float* g_green_rg[2];
+float blue_rg[2][1228800];
 float* g_blue_rg[2];
+float grayscale_rg[2][1128800];
 float* g_grayscale_rg[2];
+float grayscale[2][11228800];
 float* g_grayscale[2];
 
 void grayImage_update(int self){
@@ -71,7 +79,7 @@ __global__ void red_rg_kernel(float* red_rg, int* red){
 	}
 }
 void red_rg_update(){
-	red_rg_kernel<<<dim3(2400),dim3(512)>>>(red_rg[turn], red[turn]);
+	red_rg_kernel<<<dim3(2400),dim3(512)>>>(red_rg[turn], g_red[turn]);
 }
 
 __global__ void green_rg_kernel(float* green_rg, int* green){
@@ -81,7 +89,7 @@ __global__ void green_rg_kernel(float* green_rg, int* green){
 	}
 }
 void green_rg_update(){
-	green_rg_kernel<<<dim3(2400),dim3(512)>>>(green_rg[turn], green[turn]);
+	green_rg_kernel<<<dim3(2400),dim3(512)>>>(green_rg[turn], g_green[turn]);
 }
 
 __global__ void blue_rg_kernel(float* blue_rg, int* blue){
@@ -91,7 +99,7 @@ __global__ void blue_rg_kernel(float* blue_rg, int* blue){
 	}
 }
 void blue_rg_update(){
-	blue_rg_kernel<<<dim3(2400),dim3(512)>>>(blue_rg[turn], blue[turn]);
+	blue_rg_kernel<<<dim3(2400),dim3(512)>>>(blue_rg[turn], g_blue[turn]);
 }
 
 __global__ void grayscale_rg_kernel(float* grayscale_rg, float* red_rg, float* green_rg, float* blue_rg){
@@ -101,7 +109,7 @@ __global__ void grayscale_rg_kernel(float* grayscale_rg, float* red_rg, float* g
 	}
 }
 void grayscale_rg_update(){
-	grayscale_rg_kernel<<<dim3(2205),dim3(512)>>>(grayscale_rg[turn], red_rg[turn], green_rg[turn], blue_rg[turn]);
+	grayscale_rg_kernel<<<dim3(2205),dim3(512)>>>(grayscale_rg[turn], g_red_rg[turn], g_green_rg[turn], g_blue_rg[turn]);
 }
 
 __global__ void grayscale_kernel(float* grayscale, float* grayscale_rg){
@@ -111,7 +119,7 @@ __global__ void grayscale_kernel(float* grayscale, float* grayscale_rg){
 	}
 }
 void grayscale_update(){
-	grayscale_kernel<<<dim3(21932),dim3(512)>>>(grayscale[turn], grayscale_rg[turn]);
+	grayscale_kernel<<<dim3(21932),dim3(512)>>>(grayscale[turn], g_grayscale_rg[turn]);
 	cudaMemcpy(grayscale[turn],g_grayscale[turn],11228800 * sizeof(float), cudaMemcpyDeviceToHost);
 }
 
@@ -191,4 +199,5 @@ int main(){
 		output(grayImage[turn]);
 		turn^=1;
 	}
-}
+
+

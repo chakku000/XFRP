@@ -86,13 +86,13 @@ let macro_code () = Utils.concat_without_empty "\n" macros(*}}}*)
 
 (* ノードの値を保存するグローバルな変数を定義 *)
 let global_variable (ast : Syntax.ast) (prg : Module.program) (nodearrays_accessed_from_gnode : IntSet.t) : string =(*{{{*)
-  let turn_vairable = "char turn = 0;" in
+  let turn_vairable = "int turn = 0;" in
   let cpunode_to_variable = function
     | Single (i, t) ->
         Printf.sprintf "%s %s[2];" (Type.of_string t) i
     | Array ((i, t), n, _) ->
-        let host : string = Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n in
-        let device : string = Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i in
+        let host : string = Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i n in 
+        let device : string = Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i in(* TODO: device is not always necessary*)
         host ^ "\n" ^  device
   in
   let input =
@@ -113,8 +113,10 @@ let global_variable (ast : Syntax.ast) (prg : Module.program) (nodearrays_access
   let gnode =
     List.filter_map
       (function
-        | Syntax.GNode ((i, t), _, _, _, _) ->
-            Some (Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i)
+        | Syntax.GNode ((i, t), num, _, _, _) ->
+            let device = Printf.sprintf "%s* g_%s[2];" (Type.of_string t) i in
+            let host = Printf.sprintf "%s %s[2][%d];" (Type.of_string t) i num in
+            Some (host ^ "\n" ^ device)
         | _ ->
             None)
       ast.definitions
@@ -465,14 +467,14 @@ let setup_code (ast : Syntax.ast) (prg : Module.program) (thread : int) (host_to
     |> Utils.concat_without_empty "\n"
   in
 
-  (* TODO Initialize Input Node *)
+  (* Initialize Input Node *)
   let input_node_initialize = 
     List.filter_map
     (fun nodesym -> 
       let node_id = Hashtbl.find prg.id_table nodesym in
       let info = Hashtbl.find prg.info_table node_id in
       if (info.number > 1 && IntSet.mem node_id host_to_device)
-        then Some ( "\t// Input " ^ nodesym ^ "\n" ^ (Printf.sprintf "\tfor(int i=0;i<2;i++) cudaMalloc((void*)&g_%s[i],%d*sizeof(%s));" nodesym info.number (Type.of_string info.t)))
+        then Some ( "\t// Input " ^ nodesym ^ "\n" ^ (Printf.sprintf "\tfor(int i=0;i<2;i++) cudaMalloc((void**)&g_%s[i],%d*sizeof(%s));" nodesym info.number (Type.of_string info.t)))
         else None
     ) prg.input
         |> Utils.concat_without_empty "\n"

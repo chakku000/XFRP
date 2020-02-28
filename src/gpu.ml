@@ -306,14 +306,14 @@ let generate_gpu_node_array_update (name : string) (gexpr : Syntax.gexpr) (ast :
       in
       let arg_gnode_now = IntSet.fold
                             (fun id acc ->  let info = Hashtbl.find program.info_table id in
-                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            let arg = Printf.sprintf "g_%s[turn]" info.name in
                                             if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
                             gnode_now
                             ""
       in
       let arg_gnode_last = IntSet.fold
                             (fun id acc ->  let info = Hashtbl.find program.info_table id in
-                                            let arg = Printf.sprintf "%s[turn]" info.name in
+                                            let arg = Printf.sprintf "g_%s[turn]" info.name in
                                             if acc = "" then arg else Printf.sprintf "%s, %s" acc arg)
                             gnode_last
                             ""
