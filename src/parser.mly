@@ -142,7 +142,7 @@ prime_type_specific :
 
 (* --------------- Input --------------- *)
 input_definition:
-  | i = ID n = option(AT num=INT WITH DEFAULT LPAREN c = constant RPAREN { (num,c) }) COLON t = type_specific
+  | i = ID n = option(AT num=node_number WITH DEFAULT LPAREN c = constant RPAREN { (num,c) }) COLON t = type_specific
       {
         match n with 
         | None -> Single(i,t)
@@ -151,7 +151,7 @@ input_definition:
 
 (* --------------- Output --------------- *)
 output_definition:
-  | i = ID n = option(AT num=INT {num}) COLON t = type_specific
+  | i = ID n = option(AT num=node_number {num}) COLON t = type_specific
       {
         match n with 
         | None -> Single(i,t)
