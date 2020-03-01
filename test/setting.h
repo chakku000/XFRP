@@ -23,9 +23,12 @@ EventGroupHandle_t barrier;
 #include "opencv2/opencv.hpp"
 #include <iostream>
 #include <cstdint>
+#include <chrono>
 
 cv::VideoCapture cap(0);
 int h,w;
+
+std::chrono::system_clock::time_point start,end;
 
 void user_setup(){
 	std::cout << "setup" << std::endl;
@@ -39,8 +42,8 @@ void input(int image[]){
 	//std::cout << "input()" << std::endl;
 	cv::Mat frame;
 	cap.read(frame);
-	h = frame.rows;
-	w = frame.cols;
+	h = frame.rows / 2;
+	w = frame.cols / 2;
 	for(int x=0;x<h;x++){
 		cv::Vec3b *ptr = frame.ptr<cv::Vec3b>(x);
 		for(int y=0;y<w;y++){
@@ -50,9 +53,13 @@ void input(int image[]){
 			image[x*w+y] = (R<<16) | (G<<8) | B;
 		}
 	}
+	start = std::chrono::system_clock::now();
 }
 
 void output(float grayImage[]){
+	end = std::chrono::system_clock::now();
+	double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count();
+	printf("%lf, ",elapsed);
 	//std::cout << grayImage[0] << std::endl;
 	cv::Mat out(h,w,CV_32F,grayImage);
 	cv::imshow("gray", out);
