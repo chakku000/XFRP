@@ -1,19 +1,19 @@
 module GrayScale
-in image@1228800 with default(8421504) : Int
-out grayImage@1228800 : Float 
+in image@960*1280 with default(8421504) : Int
+out grayImage@960*1280 : Float 
 
-gnode red@1228800 with default(128) : Int = (image[self] >> 16) & 255
-gnode green@1228800 with default(128) : Int = (image[self] >> 8) & 255
-gnode blue@1228800 with default(128) : Int = image[self] & 255
+gnode red@960*1280 with default(128) : Int = (image[self] >> 16) & 255
+gnode green@960*1280 with default(128) : Int = (image[self] >> 8) & 255
+gnode blue@960*1280 with default(128) : Int = image[self] & 255
 
-gnode red_rg@1228800 with default(0.5) : Float = pow(red[self] / 255.0, 2.2)
-gnode green_rg@1228800 with default(0.5) : Float = pow(green[self] / 255.0 , 2.2)
-gnode blue_rg@1228800 with default(0.5) : Float  = pow(blue[self] / 255.0 , 2.2)
+gnode red_rg@960*1280 with default(0.5) : Float = pow(red[self] / 255.0, 2.2)
+gnode green_rg@960*1280 with default(0.5) : Float = pow(green[self] / 255.0 , 2.2)
+gnode blue_rg@960*1280 with default(0.5) : Float  = pow(blue[self] / 255.0 , 2.2)
 
-gnode grayscale_rg@1228800 with default(0.5) : Float = 0.2126 * red_rg[self] +
+gnode grayscale_rg@960*1280 with default(0.5) : Float = 0.2126 * red_rg[self] +
 						      0.7152 * green_rg[self] + 
 						      0.0722 * blue_rg[self]
 
-gnode grayscale@1228800 with default(0.5) : Float = pow(grayscale_rg[self], 1.0/2.2) 
+gnode grayscale@960*1280 with default(0.5) : Float = pow(grayscale_rg[self], 1.0/2.2) 
 
-node grayImage@1228800 with default(0.5) : Float = grayscale[self]
+node grayImage@960*1280 with default(0.5) : Float = grayscale[self]
